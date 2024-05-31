@@ -1,3 +1,4 @@
+\newcount\draft\draft=0 % set to 0 for submission or publication
 \documentclass[phd,tocprelim]{cornell}
 %
 % tocprelim option must be included to put the roman numeral pages in the
@@ -10,15 +11,123 @@
 % fixed up by Andrew Myers.
 %
 %Some possible packages to include
-\usepackage{graphicx,pstricks}
 \usepackage{graphics}
 \usepackage{moreverb}
-\usepackage{subfigure}
+%\usepackage{subfigure}
 \usepackage{epsfig}
-\usepackage{subfigure}
 \usepackage{hangcaption}
-\usepackage{txfonts}
+\usepackage{newtxtext}
+\usepackage{newtxmath}
 \usepackage{palatino}
+
+% Gator cruft
+\usepackage{amsmath,bbm,amsfonts,syntax,tikz}
+\usepackage{url}
+\usepackage{graphicx,pstricks}
+\usepackage{xspace}
+\usepackage{xxx}
+\usepackage{proof}
+\usepackage{listings}
+
+\lstset{escapeinside={<@}{@>}} % for color _coding_
+\usepackage{booktabs} % for professional tables
+\usepackage{subcaption}
+\usepackage{bm}
+
+\usetikzlibrary{shapes,arrows, chains}
+\usepackage[ligature, inference]{semantic}
+\usepackage[T1]{fontenc}
+\usepackage{mathpartir}
+\usepackage{nccmath}
+
+\usepackage{subfiles}
+
+\newcommand{\mat}{\mathsf{mat}_{n_1{\times}n_2}}
+\newcommand{\env}[1]{#1,\sigma}
+\newcommand{\defas}{\mathrel{::=}}
+\newenvironment{leftalign}%
+{\fleqn[5pt]\csname align*\endcsname}%
+{\csname endalign*\endcsname\endfleqn}
+\newcommand{\alt}{\:|\:}
+\newcommand{\bmark}{\textsf}
+
+\mathlig{->}{\rightarrow}
+\mathlig{|-}{\vdash}
+\mathlig{=>}{\Rightarrow}
+
+% In draft mode, include git revision.
+\ifnum\draft=1
+\InputIfFileExists{revision}{}{\newcommand{\Revision}{}}
+\subtitle{Draft \Revision}
+\fancyfoot[LO,RE]{
+	\footnotesize%
+	Draft \Revision%
+}
+\fi
+
+\tikzstyle{block} = [rectangle, draw, fill=gray!20,
+text width=4em, text centered, rounded corners, minimum height=4em]
+\tikzstyle{line} = [draw, -latex']
+
+% Code listings configuration.
+\lstdefinelanguage{GLSL}{
+	keywords={void, float, int, with, auto,
+		if, abs, \#ifdef, \#else, \#endif, in, out, uniform,
+		varying, attribute, return, void, space, is, coord, canon, type,
+		declare, vec, mat, as, has, frame, object, dimension, coord},
+	comment=[l]{//},
+}
+\lstset{
+	language=GLSL,
+	columns=fullflexible,
+	keepspaces=true,
+	showspaces=false,
+	showstringspaces=false,
+	keywordstyle=\bfseries,
+	basicstyle=\ttfamily\small,
+	basewidth=0.53em,
+	aboveskip=0.9\medskipamount,
+	belowskip=0.6\medskipamount,
+	mathescape=true,
+	lineskip={-2pt},
+	commentstyle=\color{gray},
+	% xleftmargin=\parindent,
+}
+
+% Shorthand for inline code.
+\newcommand{\code}{\lstinline[keywordstyle=]}
+
+% color definitions
+\definecolor{darkolivegreen}{rgb}{0.33, 0.42, 0.18}
+
+% Semantics declarations for the formalism.
+\DeclareRobustCommand\tvdash{\mathrel{||}\joinrel\mkern-.5mu\mathrel{-}}
+\newcommand{\source}[1]{\llbracket #1 \rrbracket}
+\newcommand{\ld}[1]{\leq_\Delta}
+\newcommand{\gen}[1]{\langle #1 \rangle} %generic
+\newcommand{\sca}[0]{\textrm{scalar}}
+\newcommand{\subsumption}{\textrm{SUBSUMPTION}}
+\newcommand{\unit}{\textrm{UNIT}}
+\newcommand{\scalar}{\textrm{SCALAR}}
+\newcommand{\vect}{\textrm{VECTOR}} %both vec and vector lead to funky behavior
+\newcommand{\matr}{\textrm{MATRIX}} %can't call this matrix because amsmath
+\newcommand{\decl}{\textrm{DECL}}
+\newcommand{\assign}{\textrm{ASSIGN}}
+\newcommand{\add}{\textrm{ADDITION}}
+\newcommand{\smul}{\textrm{SCAL MUL}}
+\newcommand{\vmul}{\textrm{VEC MUL}}
+\newcommand{\mmul}{\textrm{MAT MUL}}
+\newcommand{\vcmul}{\textrm{VEC CMUL}}
+\newcommand{\mcmul}{\textrm{MAT CMUL}}
+
+\newcommand{\IH}{\textrm{I.H.}}
+\newcommand{\TC}{\textrm{T.C.}}
+\newcommand{\sub}{\textrm{SUBST}}
+
+\newif\ifsemanticsdoc
+
+\newtheorem{lemma}{Lemma}
+\newtheorem{theorem}{Theorem}
 
 %if you're having problems with overfull boxes, you may need to increase
 %the tolerance to 9999
@@ -32,7 +141,7 @@
 \renewcommand{\textfraction}{0.1}
 \renewcommand{\floatpagefraction}{0.75}
 
-\title {Your Title Goes Here}
+\title {Language Design for Geometry and Heterogeneous Reasoning in Graphics Programming}
 \author {Dietrich Geisler}
 \conferraldate {August}{2024}
 \degreefield {Ph.D.}
@@ -45,9 +154,18 @@
 \makecopyright
 
 \begin{abstract}
-Your abstract goes here. Make sure it sits inside the brackets. If not,
-your biosketch page may not be roman numeral iii, as required by the
-graduate school.
+	\xxx{TODO: update from Gator Abstract}
+In domains that deal with physical space and geometry,
+programmers need to track the coordinate systems that underpin a computation.
+We identify a class of \emph{geometry bugs} that arise from confusing which coordinate system a vector belongs to.
+These bugs are not ruled out by current languages for vector-oriented computing, are difficult to check for at run time, and can generate subtly incorrect output that can be hard to test for.
+
+We introduce a type system and language that prevents geometry bugs by reflecting the coordinate system for each geometric object.
+A value's \emph{geometry type} encodes its reference frame, the kind of geometric object (such as a point or a direction), and the computational representation (such as Cartesian or spherical coordinates).
+We show how these types can rule out geometrically incorrect operations,
+and we show how to use them to automatically generate correct-by-construction code to transform vectors between coordinate systems.
+We implement a language for graphics programming, Gator, that checks geometry types and compiles to OpenGL's shading language, GLSL.
+Using case studies, we demonstrate that Gator can raise the level of abstraction for shader programming and prevent common errors without inducing significant annotation overhead or performance cost.
 \end{abstract}
 
 \begin{biosketch}
@@ -76,7 +194,8 @@ Your acknowledgements go here. Make sure it sits inside the brackets.
 The text for Section 1 goes here, without brackets.
 
 \section{SECTION 2}
-Section 2 text.
+
+\subfile{chapters/gator/main}
 
 \subsection{Subsection heading goes here}
 
@@ -103,7 +222,7 @@ light, $\varepsilon_m$ is the dielectric constant of the metal,
 $\varepsilon_i$ is the dielectric constant of neighboring insulator,
 and $\varepsilon_{air}$ is the dielectric constant of air.
 
-\chapter{Alice in Wonderland}
+\chapter{Gator: Geometry Types for Graphics Programming}
 
 \section{The Black Kitten}
   One thing was certain, that the WHITE kitten had had nothing to
@@ -172,9 +291,9 @@ happened.  Now don't make any more excuses, but listen!  Number
 two:  you pulled Snowdrop away by the tail just as I had put down
 the saucer of milk before her!  What, you were thirsty, were you?
 
-\chapter{Chapter 3}
+\chapter{Online Verification of Commutativity}
 
-\chapter{Chapter 4}
+\chapter{Caiman: DSL for Optimizing Heterogeneous Program Communication (Caiman)}
 
 \appendix
 \chapter{Chapter 1 of appendix}

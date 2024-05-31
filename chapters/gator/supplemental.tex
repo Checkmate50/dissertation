@@ -1,0 +1,280 @@
+\newcount\draft\draft=0 % set to 0 for submission or publication
+\documentclass[acmsmall,review,anonymous]{acmart}
+\settopmatter{printfolios=true,printccs=false,printacmref=false}
+
+% Remove some ACM template cruft for this draft/submission version.
+\settopmatter{printfolios=true,printccs=false,printacmref=false}
+\setcopyright{none}
+
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath,amsthm,bbm,amsfonts,syntax,graphicx,tikz}
+\usetikzlibrary{shapes,arrows, chains}
+\usepackage[ligature, inference]{semantic}
+\usepackage[T1]{fontenc}
+\usepackage{mathpartir}
+\usepackage{nccmath}
+\usepackage{xspace}
+\usepackage{xxx}
+\usepackage{proof}
+\usepackage{listings}
+\lstset{escapeinside={<@}{@>}} % for color _coding_
+\usepackage{booktabs} % for professional tables
+\usepackage{subcaption}
+\usepackage{bm}
+
+\newcommand{\lang}{Gator\xspace}
+
+\title{Geometry Types for Graphics Programming:
+    \\ Supplementary Material}
+
+\author{Dietrich Geisler}
+\email{dag368@cornell.edu}
+\author{Irene Yoon}
+\email{ey222@cornell.edu}
+\author{Horace He}
+\email{hh498@cornell.edu}
+\author{Aditi Kabra}
+\email{ank55@cornell.edu}
+\author{Yinnon Sanders}
+\email{yys4@cornell.edu}
+\author{Adrian Sampson}
+\email{asampson@cs.cornell.edu}
+\affiliation{%
+  \institution{Cornell University}
+  \city{Ithaca}
+  \state{New York}
+  \postcode{14853}
+}
+\date{}
+
+% ACM publication cruft.
+\acmJournal{PACMPL}
+\acmVolume{1}
+\acmNumber{OOPSLA}
+\acmArticle{1}
+\acmYear{2020}
+\acmMonth{1}
+\acmDOI{} % \acmDOI{10.1145/nnnnnnn.nnnnnnn}
+\startPage{1}
+
+% In draft mode, include git revision.
+\ifnum\draft=1
+\InputIfFileExists{revision}{}{\newcommand{\Revision}{}}
+\subtitle{Draft \Revision}
+\fancyfoot[LO,RE]{
+  \footnotesize%
+  Draft \Revision%
+}
+\fi
+
+% Bibliography and citations.
+\bibliographystyle{ACM-Reference-Format}
+\citestyle{acmnumeric}
+
+\newcommand{\mat}{\mathsf{mat}_{n_1{\times}n_2}}
+\newcommand{\env}[1]{#1,\sigma}
+\newcommand{\defas}{\mathrel{::=}}
+\newenvironment{leftalign}%
+{\fleqn[5pt]\csname align*\endcsname}%
+{\csname endalign*\endcsname\endfleqn}
+\newcommand{\alt}{\:|\:}
+\newcommand{\bmark}{\textsf}
+
+\mathlig{->}{\rightarrow}
+\mathlig{|-}{\vdash}
+\mathlig{=>}{\Rightarrow}
+
+\tikzstyle{block} = [rectangle, draw, fill=gray!20,
+text width=4em, text centered, rounded corners, minimum height=4em]
+\tikzstyle{line} = [draw, -latex']
+
+% Code listings configuration.
+\lstdefinelanguage{GLSL}{
+    keywords={vec4, vec3, vec2, mat3, mat4, void, float, int,
+      if, abs, \#ifdef, \#else, \#endif, in, out, uniform,
+      varying, attribute, return, void, space, is, coord, canon, type,
+      declare, vec, mat, as, has, frame, object, dimension, coord},
+    comment=[l]{//},
+}
+\lstset{
+    language=GLSL,
+    columns=fullflexible,
+    keepspaces=true,
+    showspaces=false,
+    showstringspaces=false,
+	keywordstyle=\bfseries,
+	basicstyle=\ttfamily\small,
+	basewidth=0.53em,
+	aboveskip=0.9\medskipamount,
+	belowskip=0.6\medskipamount,
+	mathescape=true,
+    lineskip={-2pt},
+	% xleftmargin=\parindent,
+}
+
+% Shorthand for inline code.
+\newcommand{\code}{\lstinline[keywordstyle=]}
+
+% color definitions
+\definecolor{darkolivegreen}{rgb}{0.33, 0.42, 0.18}
+
+% Semantics declarations for the formalism.
+\input{formalism-decls}
+
+\begin{document}
+\renewcommand\thesection{\Alph{section}}
+\setcounter{lemma}{0}
+\maketitle
+
+\section{GLSL Phong Source Code}
+\label{app:llphong}
+
+This section lists the full code for the Phong lighting model in plain GLSL~\cite{glsl}.
+
+\begin{verbatim}
+precision mediump float;
+
+// External Function Declarations
+uniform mat4 uModel;
+uniform mat4 uView;
+varying vec3 vNormal;
+uniform vec3 uLight;
+varying vec3 vPosition;
+
+void main() {
+  vec3 ambient = vec3(.1, 0., 0.);
+  vec3 lightColor = vec3(0.4, 0.3, 0.9);
+  vec3 specColor = vec3(1., 1., 1.);
+
+  vec4 homWorldPos = uModel*vec4(vPosition, 1.0);
+  vec3 camPos = normalize(vec3(uView*homWorldPos));
+  vec3 worldNorm = 
+	  normalize(vec3(uModel*vec4(vNormal, 0.0)));
+
+  vec3 lightDir = 
+    normalize(uLight - vec3(homWorldPos));
+  vec3 reflectDir = reflect(lightDir, worldNorm);
+
+  vec3 diffuse = 
+    max(lightWorldDot, 0.0) * lightColor;
+
+  float spec = pow(max(-dot(
+    camPos, reflectDir), 0.), 32.);
+  vec3 specular = spec * specColor;
+
+  gl_FragColor = vec4(ambient+diffuse+specular, 1.0);
+}
+\end{verbatim}
+
+\section{\lang Phong Source Code}
+\label{app:hlphong}
+
+This section lists equivalent code in \lang.
+
+\begin{verbatim}
+#"precision mediump float;";
+using "../glsl_defs.lgl";
+
+// Reference Frame Declarations
+
+frame model has dimension 3;
+frame world has dimension 3;
+frame camera has dimension 3;
+frame light has dimension 3;
+
+// Global Variables
+
+varying cart3<model>.point vPosition;
+canon uniform hom<model>.transformation<world> uModel;
+canon uniform hom<world>.transformation<camera> uView;
+varying cart3<model>.vector vNormal;
+uniform cart3<light>.point uLight;
+canon uniform hom<light>.transformation<world> uLightTrans;
+
+// Shader Code
+
+void main() {
+  color ambient = [.1, 0., 0.];
+  color diffColor = [0.4, 0.3, 0.9];
+  color specColor = [1.0, 1.0, 1.0];
+
+  auto worldPos = vPosition in world;
+  auto camPos = worldPos in camera;
+  auto worldNorm = normalize(vNormal in world);
+
+  auto lightDir = normalize((uLight in world) - worldPos);
+  auto lightWorldDot = dot(lightDir, worldNorm);
+  scalar diffuse = max(lightWorldDot, 0.0);
+
+  auto reflectDir = normalize(reflect(-lightDir, worldNorm) in camera);
+
+  scalar specular = pow(max(dot(normalize(-camPos), reflectDir), 0.), 32.);
+
+  vec4 gl_FragColor = 
+    vec4(ambient + diffuse * diffColor + specular * specColor, 1.0);
+}
+\end{verbatim}
+
+\section{Case Study Images}
+
+\begin{figure}
+	\centering
+	\begin{subfigure}[b]{0.45\linewidth}
+		\centering
+		\includegraphics[width=\linewidth]{fig/texture.png}
+		\caption{Texture.}
+	\end{subfigure}
+	\hfill
+	\begin{subfigure}[b]{0.45\linewidth}
+		\centering
+		\includegraphics[width=\linewidth]{fig/reflection.png}
+		\caption{Reflection.}
+	\end{subfigure}
+	
+	\begin{subfigure}[b]{0.45\linewidth}
+		\centering
+		\includegraphics[width=\linewidth]{fig/shadowmap.png}
+		\caption{Shadow map.}
+	\end{subfigure}
+	\hfill
+	\begin{subfigure}[b]{0.45\linewidth}
+		\centering
+		\includegraphics[width=\linewidth]{fig/microfacet.png}
+		\caption{Microfacet.}
+	\end{subfigure}
+	\caption{Example outputs from first four renderers used in our case studies.}
+\end{figure}
+\begin{figure}
+		\begin{subfigure}[b]{0.45\linewidth}
+		\centering
+		\includegraphics[width=\linewidth]{fig/bunnygoodfront.png}
+		\caption{Phong}
+	\end{subfigure}
+	\hfill
+	\begin{subfigure}[b]{0.45\linewidth}
+		\centering
+		\includegraphics[width=\linewidth]{fig/fog.png}
+		\caption{Fog}
+	\end{subfigure}
+		\begin{subfigure}[b]{0.45\linewidth}
+		\centering
+		\includegraphics[width=\linewidth]{fig/bump.png}
+		\caption{Bump Map}
+	\end{subfigure}
+	\hfill
+	\begin{subfigure}[b]{0.45\linewidth}
+		\centering
+		\includegraphics[width=\linewidth]{fig/spotlight.png}
+		\caption{Spotlight}
+	\end{subfigure}
+	\caption{Example outputs from last four renderers used in our case studies.}
+\end{figure}
+
+\section{Full Formal Semantics}
+\label{app:formalism}
+\input{formalism}
+
+
+\bibliography{venues,refs}
+
+\end{document}
