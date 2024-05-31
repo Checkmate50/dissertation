@@ -2,7 +2,6 @@
 \documentclass[../main.tex]{subfiles}
 
 \begin{document}
-	\maketitle
 	
 	% Enable our \mathlig substitutions.
 	\mathligson
@@ -24,20 +23,23 @@
 	\subsection{The Problem}
 	
 	\begin{figure}
+		\begin{minipage}{.48\linewidth}
 		\centering
 		\includegraphics[scale=0.25]{fig/goodbunnies.pdf}
 		\caption{Correct implementation.}
 		\label{fig:bunnygood}
-	\end{figure}
-	\begin{figure}
-		\centering
-		\includegraphics[scale=0.25]{fig/badbunnies.pdf}
-					\caption{Objects rendered with an implementation of the diffuse component of Phong lighting~\cite{phong},
-			% where the light source is fixed to the top right of the screen,
-			without (a) and with (b) a coordinate system transformation bug.
-			The root cause is an incorrect spatial translation of the light source.
-			The problem is only visible from one side of the model.}
-		\label{fig:bunnybad}
+		\end{minipage}
+		\begin{minipage}{.48\linewidth}
+			\centering
+			\includegraphics[scale=0.25]{fig/badbunnies.pdf}
+			\caption{Incorrect implementation.}
+			\label{fig:bunnybad}
+		\end{minipage}
+	\caption{Objects rendered with an implementation of the diffuse component of Phong lighting~\cite{phong},
+		% where the light source is fixed to the top right of the screen,
+		without (a) and with (b) a coordinate system transformation bug.
+		The root cause is an incorrect spatial translation of the light source.
+		The problem is only visible from one side of the model.}
 	\end{figure}
 	\begin{figure}
 		\centering
@@ -1122,14 +1124,11 @@ We report the mean and standard deviation of the frame rate across all rounds.
 
 \begin{figure}
 \centering
-\begin{minipage}{2.in}%
-\hspace{-0.2in}%
-\includegraphics[width=2.in]{fig/evalresultsgator.png}
+\includegraphics[width=\linewidth]{fig/evalresultsgator.png}
 \caption{The mean frames per second (fps) for each shader for both the baseline (GLSL) and Gator code. Error bars show the standard deviation.}
 \label{fig:runtime-results}
-\end{minipage}
-\hfill
-\begin{minipage}{3.4in}
+\end{figure}
+\begin{figure}
 \centering
 \begin{tabular}{ccccccc}
 & \multicolumn{2}{c}{Gator} & \multicolumn{2}{c}{GLSL} & \multicolumn{2}{c}{$p$-value} \\
@@ -1148,7 +1147,6 @@ Shader & Mean & S.E. & Mean & S.E. & Wilcoxon & TOST \\
 \end{tabular}
 \captionof{table}{Mean and standard error of the frame rate for the Gator and GLSL (baseline) implementation of each benchmark. We also give the $p$-value for a Wilcoxon sign rank test and two one-sided $t$-test (TOST) equivalence test that checks whether the means are within 1~fps, where * denotes statistical significance ($p < 0.05$).}
 \label{tab:perf-results}
-\end{minipage}
 \end{figure}
 
 Figure~\ref{fig:runtime-results} shows the average frames per second (fps) for the GLSL and Gator versions of each renderer, and Table~\ref{tab:perf-results} shows mean and standard deviation of each frame rate.
