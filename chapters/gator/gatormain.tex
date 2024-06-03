@@ -1,4 +1,3 @@
-\newcount\draft\draft=0 % set to 0 for submission or publication
 \documentclass[../main.tex]{subfiles}
 
 \begin{document}
@@ -723,7 +722,7 @@ New types may be declared as a \emph{subtype} of an existing type.
 For instance, we can add support for the GLSL-style \code{vec3}:
 %
 \begin{lstlisting}
-	type vec3 is float[3];
+type vec3 is float[3];
 \end{lstlisting}
 %
 Through creating a custom type alias, we can, for example, provide support for a subtype of \code{float[3]}, the GLSL \code{vec3}.
@@ -735,10 +734,10 @@ Gator introduces a typing rule where each literal type $\%p$ is a subtype of eve
 We summarize these ideas in this example:
 %
 \begin{lstlisting}
-	type vec3 is float[3];
-	vec3 s1 = [4.2, 4.2, 4.2];  // Legal 
-	float[3] x = s1;            // Legal
-	vec3 s2 = x;                // ERROR: float[3] is not a vec3
+type vec3 is float[3];
+vec3 s1 = [4.2, 4.2, 4.2];  // Legal 
+float[3] x = s1;            // Legal
+vec3 s2 = x;                // ERROR: float[3] is not a vec3
 \end{lstlisting}
 %
 This behavior of literal values allows us to capture the Gator-style intuition that a given vector can either be a geometric point or just a raw GLSL \code{vec3}, but this information is not known until the data is assigned to a variable.
@@ -746,16 +745,16 @@ This behavior of literal values allows us to capture the Gator-style intuition t
 Gator supports local type inference using the \code{auto} keyword:
 %
 \begin{lstlisting}
-	cart3<model>.point fragPos = ...;
-	// worldPos will have type cart3<world>.point
-	auto worldPos = fragPos in world;
+cart3<model>.point fragPos = ...;
+// worldPos will have type cart3<world>.point
+auto worldPos = fragPos in world;
 \end{lstlisting}
 %
 \paragraph{External Functions}
 Functions and variables defined externally in the Gator target can be written using the \code{declare} keyword.
 %
 \begin{lstlisting}
-	declare vec3 normalize(vec3 v);
+declare vec3 normalize(vec3 v);
 \end{lstlisting}
 %
 All arithmetic operations in Gator are functions which can be declared and overloaded.
@@ -769,29 +768,30 @@ Requiring this declaration allows us to include GLSL-style infix addition of vec
 Addition is then valid for values of type \code{vec3}:
 %
 \begin{lstlisting}
-	vec3 x = [0., 1., 2.];
-	vec3 result = x + x; // Legal
+vec3 x = [0., 1., 2.];
+vec3 result = x + x; // Legal
 \end{lstlisting}
 %
 But emits an error when applied to two points, as desired, since they are not subtypes of vec3 and so there is no valid function overload:
 %
 \begin{lstlisting}
-	cartesian<model>.point fragPos = [0., 1., 2.];
-	auto result = fragPos + fragPos; // ERROR: No addition defined for points
+cartesian<model>.point fragPos = [0., 1., 2.];
+// ERROR: No addition defined for points
+auto result = fragPos + fragPos; 
 \end{lstlisting}
 %
 \paragraph{Import System}
 To support using custom Gator libraries in a readable way, we built a simple import system in Gator.  Files can be imported with the keyword \code{using} followed by the name of the file:
 %
 \begin{lstlisting}
-	using "../glsl_defs.lgl";
+using "../glsl_defs.lgl";
 \end{lstlisting}
 %
 \paragraph{Unsafe Casting}
 As an escape hatch from strict vector typing, Gator provides an unsound cast expression written with \code{as!}:
 %
 \begin{lstlisting}
-	vec3 position = fragPos as! vec3;
+vec3 position = fragPos as! vec3;
 \end{lstlisting}
 %
 Casts must preserve the primitive representation; we could not, for instance, cast a variable with type \code{float[2]} to \code{float[3]}.
@@ -804,30 +804,33 @@ Per Section \ref{sec:semantics}, Gator does not include any built-in functions o
 We implement a standard library provides access to common GLSL operations.  This library consists of GLSL function declarations, scheme declarations for Cartesian and Homogeneous coordinates, and basic transformation functions such as \code{homify} and \code{reduce}.  Relevant GLSL functions are declared to work on GLSL types, such as the addition operation operation in section~\ref{sec:practice}:
 %
 \begin{lstlisting}
-	declare vec3 +(vec3 x, vec3 y);
+declare vec3 +(vec3 x, vec3 y);
 \end{lstlisting}
 %
 We build schemes in much the same way as introduced in Section~\ref{subsec:schemes}, as with the sketch of the \code{cart3} scheme:
 %
 \begin{lstlisting}
-	with frame(3) r:
-	coordinate cart3 : geometry {
-		object vector is float[3];
-		vector +(vector v1, vector v2) {
-			return [v1[0] + v2[0], v1[1] + v2[1], v1[2] + v2[2]];
-		}
-	}
+with frame(3) r:
+coordinate cart3 : geometry {
+  object vector is float[3];
+  vector +(vector v1, vector v2) {
+	return [
+	  v1[0] + v2[0], 
+	  v1[1] + v2[1], 
+	  v1[2] + v2[2]];
+  }
+}
 \end{lstlisting}
 %
 Finally, we include \code{homify} and \code{reduce} transform between homogeneous and cartesian coordinates as discussed in Section~\ref{subsec:objects}:
 %
 \begin{lstlisting}
-	hom<model>.point homify(cart3<model>.point p) {
-		return [p[0], p[1], p[2], 1.]; 
-	}
-	cart3<model>.point reduce(hom<model>.point p) {
-		return [p[0], p[1], p[2]]; 
-	}
+hom<model>.point homify(cart3<model>.point p) {
+  return [p[0], p[1], p[2], 1.]; 
+}
+cart3<model>.point reduce(hom<model>.point p) {
+  return [p[0], p[1], p[2]]; 
+}
 \end{lstlisting}
 %
 We use this same library when implementing each shader for the case study.
@@ -916,13 +919,13 @@ To calculate the angle of reflection, we need to reason about the interactions o
 Specifically, calculating the reflection amounts to the following operations, where \code{V} is the current vertex's position and \code{N} is the current normal vector, which must both be in the view frame:
 %
 \begin{lstlisting}
-	uniform samplerCube<alphaColor> uSkybox;
-	...
-	void main() {
-		...
-		cart3<view>.vector R = -reflect(V, N);
-		auto gl_FragColor = textureCube(uSkybox, R in model);
-	}
+uniform samplerCube<alphaColor> uSkybox;
+...
+void main() {
+  ...
+  cart3<view>.vector R = -reflect(V, N);
+  auto gl_FragColor = textureCube(uSkybox, R in model);
+}
 \end{lstlisting}
 %
 The key feature to note here is the transformation \code{R in model}, which accomplishes our goal of returning the light calculation to the object's perspective (the model frame).
@@ -931,21 +934,24 @@ This interaction produces a unique feature in Gator's type system, where we need
 The shader declares the matrices as follows, with the inversion being done preemptively on the CPU:
 %
 \begin{lstlisting}
-	canon uniform hom<world>.transformation<view> uView;
-	canon uniform hom<model>.transformation<world> uModel;
-	canon uniform cart3<view>.transformation<model> uInverseViewTransform;
+canon uniform hom<world>.
+  transformation<view> uView;
+canon uniform hom<model>.
+  transformation<world> uModel;
+canon uniform cart3<view>.
+  transformation<model> uInverseViewTransform;
 \end{lstlisting}
 %
 The inverse view transform uses a Cartesian (\code{cart3}) matrix because
 we intend only to use it for the vector \code{R}, which ignores the translation component of the affine transformation.  The inverse transformation is what permits us to write \code{R in model}, while the forward transformations must be uniquely given to actually send our position and normal to the view frame (as noted before):
 %
 \begin{lstlisting}
-	varying cart3<model>.point vPosition;
-	varying cart3<model>.normal vNormal;
-	void main()
-	auto N = normalize(vNormal in view);
-	auto V = -(vPosition in view);
-	...
+varying cart3<model>.point vPosition;
+varying cart3<model>.normal vNormal;
+void main()
+auto N = normalize(vNormal in view);
+auto V = -(vPosition in view);
+...
 }
 \end{lstlisting}
 %
@@ -956,8 +962,9 @@ In GLSL, it is easy to mistakenly transform the normal as if it were an ordinary
 %
 \begin{lstlisting}
 varying vec3 vNormal;
-void main()
-auto N = normalize(vec3(uView * uModel * vec4(vNormal, 0.)));
+void main() {
+  auto N = normalize(vec3(
+    uView * uModel * vec4(vNormal, 0.)));
 }
 \end{lstlisting}
 %
@@ -967,10 +974,12 @@ A new \code{normalTransformation} type can only operate on normals.
 Using these types, a simple \code{in} transformation suffices:
 %
 \begin{lstlisting}
-canon uniform cart3<model>.normalTransformation<view> uNormalMatrix;
+canon uniform cart3<model>.
+  normalTransformation<view> uNormalMatrix;
 varying cart3<model>.normal vNormal;
-void main()
-auto N = normalize(vNormal in view);  // uNormalMatrix * vNormal
+void main() {
+  // uNormalMatrix * vNormal
+  auto N = normalize(vNormal in view);  
 }
 \end{lstlisting}
 %
@@ -985,9 +994,11 @@ The first pass does all geometric operations in the vertex shader to render the 
 %
 \begin{lstlisting}
 void main() {
-// The usual transformation chain here is wrong!
-// We should instead be using uLightProjective and uLightView
-vec4 gl_Position = uProjective * uView * uModel * vec4(aPosition, 1.);
+  // The usual transformation chain here is wrong!
+  // We should instead be using 
+  //    uLightProjective and uLightView
+  vec4 gl_Position = uProjective * 
+    uView * uModel * vec4(aPosition, 1.);
 }
 \end{lstlisting}
 %
@@ -997,9 +1008,12 @@ In Gator, on the other hand, the work is done when typing the matrices themselve
 %
 \begin{lstlisting}
 attribute cart3<model>.point aPosition;
-canon uniform hom<model>.transformation<world> uModel;
-canon uniform hom<world>.transformation<light> uLightView;
-canon uniform hom<light>.transformation<lightProjective> uLightProjection;
+canon uniform hom<model>.
+  transformation<world> uModel;
+canon uniform hom<world>.
+  transformation<light> uLightView;
+canon uniform hom<light>.
+  transformation<lightProjective> uLightProjection;
 
 void main() {
 auto gl_Position = aPosition in hom<lightProjective>;
@@ -1011,12 +1025,14 @@ In GLSL, we require the following hard-to-read code:
 \begin{lstlisting}
 float texelSize = 1. / 1024.;
 float texelDepth = texture2D(uTexture, 
-vec2(uLightProjective * uLightView * uModel * vec4(vPosition, 1.))) + texelSize));
+vec2(uLightProjective * uLightView * 
+  uModel * vec4(vPosition, 1.))) + texelSize));
 \end{lstlisting}
 Using the correct transformations is difficult and hard to be sure if the correct transformation chain was used once again.  In Gator, on the other hand, this is straightforward:
 \begin{lstlisting}
 float texelSize = 1. / 1024.;
-float texelDepth = texture2D(uTexture, vec2(vPosition in lightProjective) + texelSize));
+float texelDepth = texture2D(uTexture, 
+  vec2(vPosition in lightProjective) + texelSize));
 \end{lstlisting}
 
 \paragraph{Microfacet: Custom Canonical Functions}
@@ -1037,7 +1053,8 @@ involve multiple nonobvious steps.
 If the normal and target direction are in different spaces, the GLSL code must look like this:
 %
 \begin{lstlisting}
-vec3 result = proj_normalframe(vec3(uView * uModel * vec4(modelDir, 1.)), geom_normal);
+vec3 result = proj_normalframe(vec3(uView * 
+  uModel * vec4(modelDir, 1.)), geom_normal);
 \end{lstlisting}
 %
 In Gator, we instead declare \code{proj_normalframe} with the appropriate types and a canonical tag, noting that the normal itself is a canonical part of the transformation:
@@ -1094,7 +1111,7 @@ The fragment shader is nearly identical to GLSL but with more specific types:
 uniform sampler2D<alphaColor> uTexture;
 varying vec2 vTexCoord;
 void main() {
-alphaColor gl_FragColor = texture2D(uTexture, vTexCoord);
+  alphaColor gl_FragColor = texture2D(uTexture, vTexCoord);
 }
 \end{lstlisting}
 %
