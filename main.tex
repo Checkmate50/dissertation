@@ -21,8 +21,14 @@
 \usepackage{palatino}
 
 % Gator cruft
-\usepackage{amsmath,bbm,amsfonts,syntax,tikz}
-\usetikzlibrary{snakes}
+\let\openbox\relax
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage{bbm}
+\usepackage{amsfonts}
+\usepackage{syntax}
+\usepackage{tikz}
+\usetikzlibrary{decorations.pathmorphing}
 \usepackage{url}
 \usepackage{graphicx,pstricks}
 \usepackage{xspace}
@@ -41,8 +47,6 @@
 \usepackage{mathpartir}
 \usepackage{nccmath}
 
-\usepackage{subfiles}
-
 \newcommand{\mat}{\mathsf{mat}_{n_1{\times}n_2}}
 \newcommand{\env}[1]{#1,\sigma}
 \newcommand{\defas}{\mathrel{::=}}
@@ -57,7 +61,8 @@
 \mathlig{=>}{\Rightarrow}
 
 % Commutativity Stuff
-\usepackage[norelsize]{algorithm2e}
+\usepackage{algorithm2e}
+\usepackage{microtype}
 \usepackage{fncylab}
 \usepackage{float}
 \usepackage{balance}
@@ -153,8 +158,11 @@ text width=4em, text centered, rounded corners, minimum height=4em]
 \maketitle
 \makecopyright
 
+% Enable our \mathlig substitutions.
+\mathligson
+
 \begin{abstract}
-	\xxx{TODO: update from Gator Abstract}
+\xxx{TODO: update from Gator Abstract}
 In domains that deal with physical space and geometry,
 programmers need to track the coordinate systems that underpin a computation.
 We identify a class of \emph{geometry bugs} that arise from confusing which coordinate system a vector belongs to.
@@ -222,11 +230,11 @@ and $\varepsilon_{air}$ is the dielectric constant of air.
 
 \chapter{Gator: Geometry Types for Graphics Programming}
 
-\subfile{chapters/gator/gatormain}
+\input{gatormain}
 
 \chapter{Online Verification of Commutativity}
 
-\subfile{chapters/commutativity/commmain}
+\input{commmain}
 
 \chapter{Caiman: DSL for Optimizing Heterogeneous Program Communication (Caiman)}
 

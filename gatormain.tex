@@ -1,413 +1,418 @@
-\documentclass[../main.tex]{subfiles}
+%\documentclass[../main.tex]{subfiles}
 
-\begin{document}
-	
-	% Enable our \mathlig substitutions.
-	\mathligson
-	
-	\section{Introduction}
-	\label{sec:intro}
-	
-	Applications across a broad swath of domains use linear algebra to represent geometry, coordinates, and simulations of the physical world.
-	Scientific computing workloads, robotics control software, and real-time graphics renderers all use matrices and vectors pervasively to manipulate points according to linear-algebraic laws.
-	The programming languages that express these computations, however, rarely capture the underlying \emph{geometric} properties of these operations.
-	In domains where performance is critical, most languages provide only thin abstractions over the low-level vector and matrix data types that the underlying hardware (i.e., GPU) implements.
-	A typical language might have a basic \code{vec2} data type for vectors consisting of two floating-point numbers, for example, but not distinguish between 2D vectors in rectangular or polar coordinates---or between points in differently scaled rectangular coordinate systems.
-	
-	This paper focuses on real-time 3D rendering on GPUs, where correctness hazards in linear algebra code are particularly pervasive.
-	The central problem is that graphics code frequently entangles application logic with abstract geometric reasoning. Programs must juggle vectors from a multitude of distinct coordinate systems while simultaneously optimizing for performance.
-	This conflation of abstraction and implementation concerns makes it easy to confuse different coordinate system representations and to introduce subtle bugs.
-	Figure~\ref{fig:bunnyimages} shows an example: a coordinate system handling bug yields incorrect visual output that would be difficult to catch with testing.
-	
-	\subsection{The Problem}
-	
-	\begin{figure}
-		\begin{minipage}{.48\linewidth}
-		\centering
-		\includegraphics[scale=0.25]{fig/goodbunnies.pdf}
-		\caption{Correct implementation.}
-		\label{fig:bunnygood}
-		\end{minipage}
-		\begin{minipage}{.48\linewidth}
-			\centering
-			\includegraphics[scale=0.25]{fig/badbunnies.pdf}
-			\caption{Incorrect implementation.}
-			\label{fig:bunnybad}
-		\end{minipage}
-	\caption{Objects rendered with an implementation of the diffuse component of Phong lighting~\cite{phong},
-		% where the light source is fixed to the top right of the screen,
-		without (a) and with (b) a coordinate system transformation bug.
-		The root cause is an incorrect spatial translation of the light source.
-		The problem is only visible from one side of the model.}
-	\end{figure}
-	\begin{figure}
-		\centering
-		\includegraphics[width=\linewidth]{fig/coordinate-spaces-2.pdf}
-		\caption{Coordinate systems in graphics code.
-			\textbf{Model A}, \textbf{Model B}, \textbf{World}, and \textbf{View} are coordinate systems.
-			A coordinate system is defined by its basis vectors $b$ and origin $O$.
-			% Ridiculous LaTeX note: the underscores in $b_s$ and $O_s$ were causing labeling issues. I reworded this to just refer to $b$ and $O$ by themselves to avoid this. I think it reads clearly enough this way. --A
-			The \textbf{View} represents the perspective of a simulated camera.
-			% Deleted the below because it doesn't seem 100% relevant.
-			% Applications perform geometric operations on objects in either world or view space, depending on whether these operations require information about the viewer.
-		}
-		\label{fig:spaces}
-	\end{figure}
-	
-	Coordinate systems proliferate in graphics programming because 3D scenes consist of many individual objects.
-	Figure~\ref{fig:spaces} depicts a standard setup for rendering two objects in a single scene.
-	Each object comes specified as a \emph{mesh}, which consists of coordinate vectors for each vertex position.
-	The mesh provides these vectors in a local, object-specific coordinate system called \emph{model} space.
-	The application positions multiple objects relative to one another in \emph{world} space,
-	and the simulated camera's position and angle define a \emph{view} space.
-	
-	Renderer code needs to combine vectors from different coordinate systems, such as in this distance calculation:
-	%
-	\begin{lstlisting}
-		float dist = length(teapotVertex - bunnyVertex);
-	\end{lstlisting}
-	%
-	This code may be incorrect, however, depending on the representation of the \code{teapotVertex} and \code{bunnyVertex} vectors.
-	If the values come from the mesh data, they are each represented in their respective model spaces---and subtracting them yields a geometrically meaningless result.
-	A correct computation needs to convert the operands into a common coordinate system using \emph{affine transformation} matrices:
-	%
-	\begin{lstlisting}
-		float dist = length(teapotToWorld * teapotVertex - bunnyToWorld * bunnyVertex);
-	\end{lstlisting}
-	%
-	Here, the \code{teapotToWorld} and \code{bunnyToWorld} matrices define the transformations from each model space into world space.
-	
-	\paragraph{Geometry bugs are hard to catch.}
-	
-	Mainstream rendering languages like OpenGL's GLSL~\cite{opengl} cannot statically rule out coordinate system mismatches.
-	In GLSL, the variables \code{teapotVertex} and \code{bunnyVertex} would both have the type \code{vec3}, i.e., a tuple of three floating-point numbers.
-	%
-	These bugs are also hard to detect dynamically.
-	They do not crash programs---they only manifest in visual blemishes.
-	While the buggy output in Figure~\ref{fig:bunnybad} clearly differs from the correct output in Figure~\ref{fig:bunnygood}, it can be unclear what has gone wrong---or, when examining the buggy output alone, that anything has gone wrong at all.
-	Accordingly, writing assertions or unit tests to catch this kind of bug can be challenging: specifying the behavior of a graphics program requires formalizing how the resulting scene should be perceived.
-	Viewers can perceive many possible outputs as visually indistinguishable, so even an informal specification of what makes a renderer ``correct,'' for documentation or testing, can be difficult to write.
-	
-	\paragraph{Geometry bugs in the wild.}
-	
-	Even among established graphics libraries, geometry bugs can remain latent until a seemingly correct API change reveals the bug.
-	% For example, in LÖVR, a framework for rapidly building VR experiences, the developers discovered a bug where a variable that was in one space was being used as if it was in another.\footnote{\url{https://github.com/bjornbytes/lovr/issues/55}}
-	This bug lay dormant while, to quote one of the maintainers, ``there was a change in the rendering method that amplified the problems caused by this.'' The maintainer then noted that they needed to ``go backfill this fix to all the docs/examples that have the broken version.''
-	Because their effects are hard to detect, geometry bugs can persist and cause subtle inaccuracies that grow as code evolves.
-	
-	We found similar issues that arise when APIs fail to specify information about vector spaces.
-	% In the Processing graphical IDE, for example, confusion surrounding a camera API led to a 20-comment thread before a developer concluded that ``better documentation could alleviate this to some extent: it needs to be clear that modelspace is relative to the camera at the time of construction.''\footnote{\url{https://github.com/processing/processing/issues/187}}
-	% And in the visualization library GLVisualize.jl, users disagree about the space that the library uses for a light position.\footnote{\url{https://github.com/JuliaGL/GLVisualize.jl/pull/188}}
-	The root cause in both cases is that the programming language affords no opportunity to convey vector space information.
-	
-	This paper advocates for making geometric spaces manifest in programs themselves via a type system.
-	Language support for geometric spaces can remove ambiguity and provide self-documenting interfaces between parts of a program.
-	Static type checking can automatically enforce preconditions on geometric operations that would otherwise be left unchecked.
-	
-	
-	\subsection{Geometry Types}
-	
-	We introduce a type system that can eliminate this class of bugs, and we describe a mechanism for automatic transformation that can rule out some of them by construction.
-	\emph{Geometry types} describe the coordinate system representing each value and the transformations that manipulate them.
-	A geometry type encodes three components:
-	the \emph{reference frame}, such as model, world, or view space;
-	the \emph{geometric object}, such as a point or a direction;
-	and the \emph{coordinate scheme}, such as Cartesian or spherical coordinates.
-	Together, these components define which geometric operations are legal and how to implement them.
-	
-	The core contribution of this paper is that all three components of geometry types are necessary.  
-	The three aspects interact in subtle ways, and real-world graphics rendering code varies in each component.
-	Simpler systems that only use a single label~\cite{safegi} cannot express the full flexibility of realistic rendering code and cannot cleanly support automatic transformations.
-	We show how encoding geometry types in a real system can help avoid and eliminate realistic geometry bugs.
-	We will explore further how these components are defined and interact to provide operation information in Section~\ref{sec:langlang}.
-	
-	We design a language, Gator, that builds on geometry types to rule out coordinate system bugs and to automatically generate correct transformation code.
-	In Gator, programmers can write \code{teapotVertex in world} to obtain a representation of the \code{teapotVertex} vector in the \code{world} reference frame.
-	% The Gator compiler finds the appropriate sequence of matrix--vector multiplications necessary to produce a result of the correct type.
-	The end result is a higher-level programming model that lets programmers focus on the geometric semantics of their programs without sacrificing efficiency.
-	
-	We implement Gator as an overlay on GLSL~\cite{glsl}, a popular language for implementing shaders in real-time graphics pipelines.
-	Most GLSL programs are also valid in Gator, so programmers can easily port existing code and incrementally add typing annotations to improve its safety.
-	We formalize a geometry type system and show that erasing these types preserves soundness.
-	In our evaluation, we port rendering programs from GLSL to qualitatively explore Gator's expressiveness and its ability to rule out geometry bugs.
-	We also quantitatively compare the applications to standard GLSL implementations and find that Gator's automatic generation of transformation code does not yield meaningfully slower rendering time than hand-tuned (and unsafe) GLSL code.
-	
-	This paper's contributions are:
-	%
-	\begin{itemize}
-		\item We identify a class of geometry bugs that exist in geometry-heavy, linear-algebra-centric code such as physical simulations and graphics renderers.
-		\item We design a type system to describe latent coordinate systems present in linear algebra computations and prevents geometry bugs.
-		\item We introduce a language construct that builds on the type system to automatically generate transformation code that is type correct by construction.
-		\item We implement the type system and automatic transformation feature in Gator, an overlay on the GLSL language that powers all OpenGL-based 3D rendering.
-		\item We experiment with case studies in the form of real graphics rendering code to show how Gator can express common patterns and prevent bugs with minimal performance overhead.
-	\end{itemize}
-	%
-	We begin with some background via a running example
-	before describing Gator in detail.
-	
-	
-	\section{Running Example: Diffuse Shading}
-	\label{sec:example}
-	
-	This section introduces the concept of geometry bugs via an example:
-	we implement \emph{diffuse lighting}, a component of the classic Phong lighting model~\cite{phong}.\footnote{Appendix A gives a complete GLSL implementation of the Phong model.}
-	We assume some basic linear algebra concepts but no background in graphics or rendering.
-	
-	\subsection{Gentle Introduction to Shader Programming}
-	Shader programs are code, typically written in C-like languages such as GLSL or HLSL, that runs on the GPU to render a graphics \emph{scene}. The GPU executes a pipeline of shader programs, where each shader is specialized to transform a certain property of a graphical object.  The shader pipeline consists of several stages.  The most notable of these stages are the vertex shader, which outputs the position of each vertex as a pixel and the fragment shader, which outputs the color of each \emph{fragment} corresponding to an on-screen pixel.
-	
-	In graphics, the \emph{scene} is a collection of objects. The shape of an object is determined by mesh data consisting of \emph{position vectors} for each vertex, denoting the spatial structure of the object, and \emph{normal vectors}, denoting the surface orientation at each vertex. 
-	
-	The kind of transformation each graphics shader applies to a graphical object depends on the pipeline stage. 
-	We focus on the vertex and fragment shader, the most common user-programmable stages of the graphics pipeline. 
-	
-	\subsection{Diffuse Lighting} 
-	
-	Diffuse lighting is a basic lighting model that simulates the local illumination on the surface of an object.
-	Given a point on an object, the intensity of its diffuse component is proportional to the angle between the position of the light ray and the local surface normal. 
-	The diffuse model first computes the direction of the light by subtracting the mesh (surface) position, \textit{fragPos}, from the light position:
-	%
-	\begin{align*}
-		\mathit{lightDir} &= \mathsf{normalize}(\mathit{lightPos} - \mathit{fragPos})
-	\end{align*}
-	%
-	We normalize the vector, which preserves the angle but sets the magnitude to 1. 
-	We calculate the resulting diffuse intensity at this fragment as the angle between the incoming light ray and the fragment normal using the vector dot product (which is algebraically the sum of the product of vector components):
-	%
-	\begin{align*}
-		\mathit{diffuse} &= \mathsf{max}(\mathit{lightDir}\cdot\mathit{fragNorm}, 0.)
-	\end{align*}
-	%
-	The \textsf{max} function used here prevents light from passing through the object by rejecting reflection angles greater than perpendicular.
-	
-	\subsection{Where Things Go Wrong: GLSL Implementation}
-	\label{subsec:wrong}
-	To implement the diffuse lighting model, we must write a GLSL shader program that operates on a per-fragment basis. 
-	This section shows how this seemingly simple program translates to surprisingly complex code.
-	We identify pitfalls in this implementation process that our type system will address.
-	
-	GLSL has vector and matrix types, with names like \code{vec3} and \code{mat4}, along with built-in vector functions that make an initial implementation of the diffuse component seem straightforward:
-	%
-	\begin{lstlisting}
-		float naiveDiffuse(vec3 lightPos, vec3 fragPos, vec3 fragNorm) {
-			vec3 lightDir = normalize(lightPos - fragPos);
-			return max(dot(lightDir, normalize(fragNorm)), 0.);
-		}
-	\end{lstlisting}
-	%
-	% Unfortunately, this na\"ive implementation has a bug because it fails to account for coordinate systems.
-	Although \code{lightPos} and \code{fragPos} have the same type, they are not geometrically compatible: real renderers need to represent them with different reference frames and coordinate schemes.
-	While this incorrect code directly reflects the mathematical description above, the output is nonetheless incorrect:
-	it produces the buggy output in Figure~\ref{fig:bunnybad}.
-	
-	% \xxx[a]{Let's put a real quick transition paragraph here to say something like: ``Unfortunately, this naive implementation has lots of bugs that reveal disconnects between the mathematical description above and the more specific computational implementation. We will describe each of those problems, which will motivate Gator's language design...''}
-	% \xxx[dg]{Nah, there's really only one bug that leads to several issues.  I really like the transition straight into the issue here; that we're leading into what Gator does feels implicitly true by the structure of the section}
-	
-	\paragraph{Coordinate Systems}
-	The underlying problem is that software needs to represent different vectors in different coordinate systems.
-	Information needed to render the shape of a single graphical object, the positions and normal vectors, lies in the object's \emph{model space}, as can be seen in Figure~\ref{fig:spaces}.
-	A model space represents the coordinates local to a single object in the scene.
-	The origin of this space is centered in the model, with basis vectors matching the model orientation and scale.
-	Both may change dynamically as time passes in the scene; however, each is fixed during a single iteration of the shader.
-	\emph{World space} gives the absolute coordinates for the entire scene, so the basis vectors and origin of world space are typically fixed.
-	
-	Mesh data is scene independent, so we represent mesh parameters such as \code{fragPos} and \code{fragNorm} initially in model space, independent of the object's current relative position within the scene.
-	In contrast, we represent the position of a light source relative to the entire scene---so \code{lightPos} is in world space.
-	As a result, the subtraction expression \code{lightPos - fragPos} attempts to compare vectors represented in different spaces, yielding a geometrically meaningless result.
-	This bug produces the incorrect output seen in Figure~\ref{fig:bunnybad}.
-	
-	\paragraph {Transformation Matrices} To fix this program, the shader needs to \emph{transform} the two vectors to a common coordinate system before subtracting them. 
-	Mathematically, coordinate systems define an affine space, and thus geometric transformations on coordinate systems can be linear or affine.
-	Affine transformations can change the origin and basis vectors, which can represent translation, while linear transformations affect only the basis vectors, which can represent rotation and scale. 
-	
-	These geometric transformations are represented in code as \emph{transformation matrices}.
-	To apply a transformation to a vector, shader code uses matrix-vector multiplication. 
-	For example, the shader application may provide a matrix \code{uModel} that defines the transformation from model to world space using matrix multiplication:
-	\begin{lstlisting}
-		vec3 lightDir = normalize(lightPos - <@\textcolor{darkolivegreen}{uModel * }@>fragPos));
-	\end{lstlisting}
-	
-	\paragraph{Homogeneous Coordinates}
-	Unfortunately, this matrix multiplication implementation introduces another bug.
-	Transforming \code{fragPos} from model to world space requires both a linear scaling and rotation transformation and a translation to account for change of origins.
-	This linear transformations with translation is represented by an \emph{affine transformation matrix}. 
-	This is a problem: an affine transformation matrix for 3D vectors must be represented as a $4\times4$ matrix. To multiply this matrix by \code{fragPos} (which is a 3-dimensional vector), we need a sensible representation of \code{fragPos} as a 4-dimensional vector.
-	It is thus not immediately clear by what vector we need to multiply:
-	%
-	\begin{lstlisting}
-		vec3 lightDir = normalize(lightPos - <@\textcolor{darkolivegreen}{vec3(uModel *}@><@\textcolor{red}{?}@><@\textcolor{darkolivegreen}{)}@>);
-	\end{lstlisting}
-	%
-	Because a 3$\times$3 Cartesian transformation matrix on 3-dimensional vectors can only express linear transformations, graphics software typically uses a second kind of coordinate system called \emph{homogeneous coordinates}.
-	An $n$-dimensional vector in homogeneous coordinates uses $n+1$ values: the underlying Cartesian coordinates and a \emph{scaling factor}, $w$.
-	A 4$\times$4 transformation matrix in homogeneous coordinates can express \emph{affine} transformations on the underlying 3-dimensional space, including translation.
-	
-	To convert from Cartesian to homogeneous coordinates, a vector $[x, y, z]$ becomes $[x, y, z, 1.]$;
-	in the opposite direction, the homogeneous vector $[x, y, z, w]$ becomes $[x/w, y/w, z/w]$.
-	To fix our example to use the 4-dimensional affine transformation \code{uModel}, we can extend \code{fragPos} into a homogeneous \code{vec4} value:
-	%
-	\begin{lstlisting}
-		vec3 lightDir = normalize(lightPos - <@\textcolor{darkolivegreen}{vec3(uModel * vec4(}@>fragPos<@\textcolor{darkolivegreen}{, 1.))}@>);
-	\end{lstlisting}
-	%
-	The GLSL functions \code{vec4} and \code{vec3} extend a 3-dimensional vector with the given component and truncate a 4-dimensional vector, respectively. We now have a \code{lightDir} in a consistent coordinate system, namely in the world space.
-	
-	The final calculation of the diffuse intensity uses this expression:
-	%
-	\begin{lstlisting}
-		max(dot(lightDir, normalize(fragNorm)), 0.)
-	\end{lstlisting}
-	%
-	Here, \code{fragNorm} resides in model space and should be transformed into world space. One tricky detail, however, is that \code{fragNorm} denotes a \emph{direction}, as opposed to a \emph{position} as in \code{fragPos}. 
-	These require different geometric representations, because a direction should not be affected by translation. 
-	Fortunately, there is a trick to avoid this issue while still permitting the use of our nice homogeneous coordinate representation.
-	By extending \code{fragNorm} with $w = 0$, affine translation is not applied. 
-	%
-	\begin{lstlisting}
-		return max(dot(lightDir, normalize(<@\textcolor{darkolivegreen}{vec3(uModel * vec4(}@>fragNorm<@\textcolor{darkolivegreen}{, 0.))}@>);
-	\end{lstlisting}
-	%
-	This subtle difference is a common source of errors, particularly for novice programmers. 
-	Finally, we have a correct GLSL implementation of \code{diffuse}. This version results in the correct output in Figure~\ref{fig:bunnygood}. 
-	
-	\section{Geometry Types}
-	\label{sec:langlang}
-	
-	The problems in the previous section arise from the gap between the abstract math and the concrete implementation in code.
-	We classify this kind of bug, when code performs geometrically meaningless operations, as a \emph{geometry error}.
-	Gator provides a framework for declaring a type system that can define and catch geometry errors in programs.
-	
-	The core concept in Gator is the introduction of \emph{geometry types}.
-	These types refine simple GLSL-like vector data types, such as \code{vec3} and \code{mat4}, with information about the geometric object they represent.
-	A geometry type consists of three components:
-	%
-	\begin{itemize}
-		\item The \emph{reference frame} defines the position and orientation of the coordinate system. A reference frame is determined by its basis vectors and origin. Examples of reference frames are model, world, and projective space. 
-		\item The \emph{coordinate scheme} describes a coordinate system by providing operation and object definitions, such as homogeneous and Cartesian coordinates. Coordinate schemes expresses how to represent an abstract value computationally, which identifies what the underlying GLSL-like type is.
-		\item The \emph{geometric object} describes which geometric construct the data represents, such as a point, vector, or transformation.
-	\end{itemize}
-	%
-	In Gator, the syntax for a geometry type is 
-	%
-	\code{scheme<frame>.object}
-	%
-	This notation invokes both module members and parametric polymorphism.
-	Coordinate schemes are parameterized by a reference frame, while geometric objects are member types of a parameterized scheme.
-	For example, \code{cart3<world>.point} is the type of a point lying in world space represented in a 3D Cartesian coordinate scheme.
-	
-	The three geometry type components suffice to rule out the errors described in Section~\ref{sec:example}.
-	The rest of the section details each component. 
-	
-	\subsection{Reference Frames}
-	\label{subsec:geotypes}
-	We can enhance the mathematical diffuse light computation above using geometry types:
-	%
-	\begin{lstlisting}
-		float diffuseNaive(
-		<@\textcolor{darkolivegreen}{cart3<world>.point}@> lightPos, 
-		<@\textcolor{darkolivegreen}{cart3<model>.point}@> fragPos, 
-		<@\textcolor{darkolivegreen}{cart3<model>.direction}@> fragNorm) {
-			cart3<world>.direction lightDir = normalize(lightPos - fragPos);
-			return max(dot(lightDir, normalize(fragNorm)), 0.0);
-		}
-	\end{lstlisting}
-	%
-	With these stronger types, the expression \code{lightPos - fragPos} in this function is an error, since \code{lightPos} and \code{fragPos} are in different frames. 
-	It is geometrically legal to subtract two positions to produce a vector; the only issue with this code is the difference of reference frames.  
-	We will further discuss how Gator determines subtraction is legal in Section~\ref{subsec:schemes}.
-	
-	\paragraph{Definition}
-	Reference frames in Gator are labels with an integer dimension.  The dimension of a frame specifies the number of linearly independent basis vectors which make up the frame. Gator does not require explicit basis vectors for constructing frames; keeping basis vectors implicit helps minimize programmer requirements and helps avoid cluttering definitions with information we don't really need.
-	We will discuss what keeps these basis vectors are implicit through transformations between reference frames in Section~\ref{sec:in}.
-	
-	The Gator syntax to declare the three-dimensional model and world frames is:
-	%
-	\begin{lstlisting}
-		frame model has dimension 3;
-		frame world has dimension 3;
-	\end{lstlisting}
-	%
-	\subsection{Coordinate Schemes}
-	\label{subsec:schemes}
-	
-	To transform \code{fragPos} and \code{fragNormal} to the \code{world} reference frame, we need to provide an affine transformation matrix \code{uModel}.
-	%
-	\begin{lstlisting}
-		float diffuse(
-		cart3<world>.point lightPos, 
-		cart3<model>.point fragPos, 
-		cart3<model>.direction fragNorm,
-		<@\textcolor{darkolivegreen}{hom3<model>}@>.transformation<world> uModel) {
-			cart3<world>.direction lightDir = 
-			normalize(lightPos - (uModel * fragPos));
-			return max(dot(lightDir, normalize(<@\textcolor{darkolivegreen}{uModel *} fragNorm)), 0.0);
-		}
-	\end{lstlisting}
-	%
-	For this example, we define matrix--vector multiplication \code{$m$ * $v$} to update types akin to function application: it ensures that $m$ is a transformation in the same frame as the vector and parameterized on the destination frame $f$, then produces an output direction in the frame $f$.
-	With this definition, multiplying \code{uModel} by an object in the \code{model} reference frame will result in an object in the \code{world} frame.
-	
-	Unfortunately, multiplying \code{uModel * fragPos} produces a Gator type error since \code{uModel} and \code{fragPos} are in different coordinate schemes.
-	We will resolve this issue in the next subsection by converting between schemes.
-	
-	\paragraph{Definition}
-	Coordinate schemes provide definitions of geometric objects and operations.
-	Concretely, they consist of operation type declarations and concrete definitions for member objects and operations.
-	Geometric operations defined in coordinate schemes are expected to provide geometrically correct code, and are generally intended (though not required) to operate between objects within the coordinate scheme.
-	Recall that, instead of ``baking in'' a particular notion of geometry, Gator lets coordinate schemes provide types that define correctness for a given set of geometric operations.
-	%
-	\begin{lstlisting}
-		with frame(3) r:
-		coordinate cart3 : geometry {
-			object vector is float[3];
-			...
-		}
-	\end{lstlisting}
-	For example, we can define 3D vector addition in Cartesian coordinates, which consists of adding the components of two vectors together.
-	\begin{lstlisting}
-		vector +(vector v1, vector v2) {
-			return [v1[0] + v2[0], v1[1] + v2[1], v1[2] + v2[2]];
-		}
-	\end{lstlisting}
-	%
-	All coordinate schemes are required to be parameterized with reference frames, so \code{cart3<model>} and \code{cart3<world>} are different instantiations of the same scheme.
-	Gator's \code{with} syntax provides parametric polymorphism in the usual sense; in this example, the 3-dimensional Cartesian coordinate scheme is polymorphic over all 3-dimensional reference frames.
-	
-	\subsection{Geometric Objects}
-	\label{subsec:objects}
-	
-	To apply the \code{uModel} affine transformation to our position and normal, we first need to convert each to homogeneous coordinates.  Recall from Section~\ref{subsec:wrong}, however, that this coordinate system transformation \emph{differs for points and directions}.
-	To capture this distinction, we introduce the overloaded function \code{homify}:\footnote{For simplicity, this example \code{homify} is written only for objects in the \code{model} frame.  Gator supports function parameterization on reference frames, so we would normally write \code{homify} to work on any frame.}
-	%
-	\begin{lstlisting}
-		hom<model>.point homify(cart3<model>.point p) {
-			return [p[0], p[1], p[2], 1.]; 
-		} 
-		hom<model>.direction homify(cart3<model>.direction p) {
-			return [p[0], p[1], p[2], 0.]; 
-		}
-	\end{lstlisting}
-	%
-	Unlike Cartesian coordinates, homogeneous coordinates have different representations for points and directions: the latter must have zero for its last coordinate, $w$.
-	
-	To send \code{fragPos} and \code{fragNorm} to homogeneous coordinates, it suffices to call \code{homify} and let the Gator compiler select the correct overloaded variant:
-	%
-	\begin{lstlisting}
-		homify(fragPos);  // Extends fragPos with w=1.
-		homify(fragNorm); // Extends fragNorm with w=0.
-	\end{lstlisting}  
-	%
-	We repeat this process to define the function \code{reduce}, which maps homogeneous to Cartesian coordinates.  Finally, we apply these functions to our model:
-	%
-	\begin{lstlisting}
-		float diffuse(
-		cart3<world>.point lightPos, 
-		cart3<model>.point fragPos, 
-		cart3<model>.direction fragNorm,
-		hom3<model>}.transformation<world> uModel) {
-		cart3<world>.direction lightDir = normalize(lightPos - <@\textcolor{darkolivegreen}{reduce}@>(uModel * <@\textcolor{darkolivegreen}{homify(}@>fragPos<@\textcolor{darkolivegreen}{)}@>));
-		return max(dot(lightDir, normalize(<@\textcolor{darkolivegreen}{reduce}@>(uModel * <@\textcolor{darkolivegreen}{homify(}@>fragNorm))), 0.0));
-	}
+\section{Introduction}
+\label{sec:intro}
+
+Applications across a broad swath of domains use linear algebra to represent geometry, coordinates, and simulations of the physical world.
+Scientific computing workloads, robotics control software, and real-time graphics renderers all use matrices and vectors pervasively to manipulate points according to linear-algebraic laws.
+The programming languages that express these computations, however, rarely capture the underlying \emph{geometric} properties of these operations.
+In domains where performance is critical, most languages provide only thin abstractions over the low-level vector and matrix data types that the underlying hardware (i.e., GPU) implements.
+A typical language might have a basic \code{vec2} data type for vectors consisting of two floating-point numbers, for example, but not distinguish between 2D vectors in rectangular or polar coordinates---or between points in differently scaled rectangular coordinate systems.
+
+This paper focuses on real-time 3D rendering on GPUs, where correctness hazards in linear algebra code are particularly pervasive.
+The central problem is that graphics code frequently entangles application logic with abstract geometric reasoning. Programs must juggle vectors from a multitude of distinct coordinate systems while simultaneously optimizing for performance.
+This conflation of abstraction and implementation concerns makes it easy to confuse different coordinate system representations and to introduce subtle bugs.
+Figure~\ref{fig:bunnyimages} shows an example: a coordinate system handling bug yields incorrect visual output that would be difficult to catch with testing.
+
+\subsection{The Problem}
+
+\begin{figure}
+\begin{minipage}{.48\linewidth}
+\centering
+\includegraphics[scale=0.25]{fig/goodbunnies.pdf}
+\caption{Correct implementation.}
+\label{fig:bunnygood}
+\end{minipage}
+\begin{minipage}{.48\linewidth}
+	\centering
+	\includegraphics[scale=0.25]{fig/badbunnies.pdf}
+	\caption{Incorrect implementation.}
+	\label{fig:bunnybad}
+\end{minipage}
+\caption{Objects rendered with an implementation of the diffuse component of Phong lighting~\cite{phong},
+% where the light source is fixed to the top right of the screen,
+without (a) and with (b) a coordinate system transformation bug.
+The root cause is an incorrect spatial translation of the light source.
+The problem is only visible from one side of the model.}
+\end{figure}
+\begin{figure}
+\centering
+\includegraphics[width=\linewidth]{fig/coordinate-spaces-2.pdf}
+\caption{Coordinate systems in graphics code.
+	\textbf{Model A}, \textbf{Model B}, \textbf{World}, and \textbf{View} are coordinate systems.
+	A coordinate system is defined by its basis vectors $b$ and origin $O$.
+	% Ridiculous LaTeX note: the underscores in $b_s$ and $O_s$ were causing labeling issues. I reworded this to just refer to $b$ and $O$ by themselves to avoid this. I think it reads clearly enough this way. --A
+	The \textbf{View} represents the perspective of a simulated camera.
+	% Deleted the below because it doesn't seem 100% relevant.
+	% Applications perform geometric operations on objects in either world or view space, depending on whether these operations require information about the viewer.
+}
+\label{fig:spaces}
+\end{figure}
+
+Coordinate systems proliferate in graphics programming because 3D scenes consist of many individual objects.
+Figure~\ref{fig:spaces} depicts a standard setup for rendering two objects in a single scene.
+Each object comes specified as a \emph{mesh}, which consists of coordinate vectors for each vertex position.
+The mesh provides these vectors in a local, object-specific coordinate system called \emph{model} space.
+The application positions multiple objects relative to one another in \emph{world} space,
+and the simulated camera's position and angle define a \emph{view} space.
+
+Renderer code needs to combine vectors from different coordinate systems, such as in this distance calculation:
+%
+\begin{lstlisting}
+float dist = length(teapotVertex - bunnyVertex);
+\end{lstlisting}
+%
+This code may be incorrect, however, depending on the representation of the \code{teapotVertex} and \code{bunnyVertex} vectors.
+If the values come from the mesh data, they are each represented in their respective model spaces---and subtracting them yields a geometrically meaningless result.
+A correct computation needs to convert the operands into a common coordinate system using \emph{affine transformation} matrices:
+%
+\begin{lstlisting}
+float dist = length(teapotToWorld * teapotVertex - 
+	bunnyToWorld * bunnyVertex);
+\end{lstlisting}
+%
+Here, the \code{teapotToWorld} and \code{bunnyToWorld} matrices define the transformations from each model space into world space.
+
+\paragraph{Geometry bugs are hard to catch.}
+
+Mainstream rendering languages like OpenGL's GLSL~\cite{opengl} cannot statically rule out coordinate system mismatches.
+In GLSL, the variables \code{teapotVertex} and \code{bunnyVertex} would both have the type \code{vec3}, i.e., a tuple of three floating-point numbers.
+%
+These bugs are also hard to detect dynamically.
+They do not crash programs---they only manifest in visual blemishes.
+While the buggy output in Figure~\ref{fig:bunnybad} clearly differs from the correct output in Figure~\ref{fig:bunnygood}, it can be unclear what has gone wrong---or, when examining the buggy output alone, that anything has gone wrong at all.
+Accordingly, writing assertions or unit tests to catch this kind of bug can be challenging: specifying the behavior of a graphics program requires formalizing how the resulting scene should be perceived.
+Viewers can perceive many possible outputs as visually indistinguishable, so even an informal specification of what makes a renderer ``correct,'' for documentation or testing, can be difficult to write.
+
+\paragraph{Geometry bugs in the wild.}
+
+Even among established graphics libraries, geometry bugs can remain latent until a seemingly correct API change reveals the bug.
+% For example, in LÖVR, a framework for rapidly building VR experiences, the developers discovered a bug where a variable that was in one space was being used as if it was in another.\footnote{\url{https://github.com/bjornbytes/lovr/issues/55}}
+This bug lay dormant while, to quote one of the maintainers, ``there was a change in the rendering method that amplified the problems caused by this.'' The maintainer then noted that they needed to ``go backfill this fix to all the docs/examples that have the broken version.''
+Because their effects are hard to detect, geometry bugs can persist and cause subtle inaccuracies that grow as code evolves.
+
+We found similar issues that arise when APIs fail to specify information about vector spaces.
+% In the Processing graphical IDE, for example, confusion surrounding a camera API led to a 20-comment thread before a developer concluded that ``better documentation could alleviate this to some extent: it needs to be clear that modelspace is relative to the camera at the time of construction.''\footnote{\url{https://github.com/processing/processing/issues/187}}
+% And in the visualization library GLVisualize.jl, users disagree about the space that the library uses for a light position.\footnote{\url{https://github.com/JuliaGL/GLVisualize.jl/pull/188}}
+The root cause in both cases is that the programming language affords no opportunity to convey vector space information.
+
+This paper advocates for making geometric spaces manifest in programs themselves via a type system.
+Language support for geometric spaces can remove ambiguity and provide self-documenting interfaces between parts of a program.
+Static type checking can automatically enforce preconditions on geometric operations that would otherwise be left unchecked.
+
+
+\subsection{Geometry Types}
+
+We introduce a type system that can eliminate this class of bugs, and we describe a mechanism for automatic transformation that can rule out some of them by construction.
+\emph{Geometry types} describe the coordinate system representing each value and the transformations that manipulate them.
+A geometry type encodes three components:
+the \emph{reference frame}, such as model, world, or view space;
+the \emph{geometric object}, such as a point or a direction;
+and the \emph{coordinate scheme}, such as Cartesian or spherical coordinates.
+Together, these components define which geometric operations are legal and how to implement them.
+
+The core contribution of this paper is that all three components of geometry types are necessary.  
+The three aspects interact in subtle ways, and real-world graphics rendering code varies in each component.
+Simpler systems that only use a single label~\cite{safegi} cannot express the full flexibility of realistic rendering code and cannot cleanly support automatic transformations.
+We show how encoding geometry types in a real system can help avoid and eliminate realistic geometry bugs.
+We will explore further how these components are defined and interact to provide operation information in Section~\ref{sec:langlang}.
+
+We design a language, Gator, that builds on geometry types to rule out coordinate system bugs and to automatically generate correct transformation code.
+In Gator, programmers can write \code{teapotVertex in world} to obtain a representation of the \code{teapotVertex} vector in the \code{world} reference frame.
+% The Gator compiler finds the appropriate sequence of matrix--vector multiplications necessary to produce a result of the correct type.
+The end result is a higher-level programming model that lets programmers focus on the geometric semantics of their programs without sacrificing efficiency.
+
+We implement Gator as an overlay on GLSL~\cite{glsl}, a popular language for implementing shaders in real-time graphics pipelines.
+Most GLSL programs are also valid in Gator, so programmers can easily port existing code and incrementally add typing annotations to improve its safety.
+We formalize a geometry type system and show that erasing these types preserves soundness.
+In our evaluation, we port rendering programs from GLSL to qualitatively explore Gator's expressiveness and its ability to rule out geometry bugs.
+We also quantitatively compare the applications to standard GLSL implementations and find that Gator's automatic generation of transformation code does not yield meaningfully slower rendering time than hand-tuned (and unsafe) GLSL code.
+
+This paper's contributions are:
+%
+\begin{itemize}
+\item We identify a class of geometry bugs that exist in geometry-heavy, linear-algebra-centric code such as physical simulations and graphics renderers.
+\item We design a type system to describe latent coordinate systems present in linear algebra computations and prevents geometry bugs.
+\item We introduce a language construct that builds on the type system to automatically generate transformation code that is type correct by construction.
+\item We implement the type system and automatic transformation feature in Gator, an overlay on the GLSL language that powers all OpenGL-based 3D rendering.
+\item We experiment with case studies in the form of real graphics rendering code to show how Gator can express common patterns and prevent bugs with minimal performance overhead.
+\end{itemize}
+%
+We begin with some background via a running example
+before describing Gator in detail.
+
+
+\section{Running Example: Diffuse Shading}
+\label{sec:example}
+
+This section introduces the concept of geometry bugs via an example:
+we implement \emph{diffuse lighting}, a component of the classic Phong lighting model~\cite{phong}.\footnote{Appendix A gives a complete GLSL implementation of the Phong model.}
+We assume some basic linear algebra concepts but no background in graphics or rendering.
+
+\subsection{Gentle Introduction to Shader Programming}
+Shader programs are code, typically written in C-like languages such as GLSL or HLSL, that runs on the GPU to render a graphics \emph{scene}. The GPU executes a pipeline of shader programs, where each shader is specialized to transform a certain property of a graphical object.  The shader pipeline consists of several stages.  The most notable of these stages are the vertex shader, which outputs the position of each vertex as a pixel and the fragment shader, which outputs the color of each \emph{fragment} corresponding to an on-screen pixel.
+
+In graphics, the \emph{scene} is a collection of objects. The shape of an object is determined by mesh data consisting of \emph{position vectors} for each vertex, denoting the spatial structure of the object, and \emph{normal vectors}, denoting the surface orientation at each vertex. 
+
+The kind of transformation each graphics shader applies to a graphical object depends on the pipeline stage. 
+We focus on the vertex and fragment shader, the most common user-programmable stages of the graphics pipeline. 
+
+\subsection{Diffuse Lighting} 
+
+Diffuse lighting is a basic lighting model that simulates the local illumination on the surface of an object.
+Given a point on an object, the intensity of its diffuse component is proportional to the angle between the position of the light ray and the local surface normal. 
+The diffuse model first computes the direction of the light by subtracting the mesh (surface) position, \textit{fragPos}, from the light position:
+%
+\begin{align*}
+\mathit{lightDir} &= \mathsf{normalize}(\mathit{lightPos} - \mathit{fragPos})
+\end{align*}
+%
+We normalize the vector, which preserves the angle but sets the magnitude to 1. 
+We calculate the resulting diffuse intensity at this fragment as the angle between the incoming light ray and the fragment normal using the vector dot product (which is algebraically the sum of the product of vector components):
+%
+\begin{align*}
+\mathit{diffuse} &= \mathsf{max}(\mathit{lightDir}\cdot\mathit{fragNorm}, 0.)
+\end{align*}
+%
+The \textsf{max} function used here prevents light from passing through the object by rejecting reflection angles greater than perpendicular.
+
+\subsection{Where Things Go Wrong: GLSL Implementation}
+\label{subsec:wrong}
+To implement the diffuse lighting model, we must write a GLSL shader program that operates on a per-fragment basis. 
+This section shows how this seemingly simple program translates to surprisingly complex code.
+We identify pitfalls in this implementation process that our type system will address.
+
+GLSL has vector and matrix types, with names like \code{vec3} and \code{mat4}, along with built-in vector functions that make an initial implementation of the diffuse component seem straightforward:
+%
+\begin{lstlisting}
+float naiveDiffuse(vec3 lightPos, vec3 fragPos, vec3 fragNorm) {
+  vec3 lightDir = normalize(lightPos - fragPos);
+  return max(dot(lightDir, normalize(fragNorm)), 0.);
+}
+\end{lstlisting}
+%
+% Unfortunately, this na\"ive implementation has a bug because it fails to account for coordinate systems.
+Although \code{lightPos} and \code{fragPos} have the same type, they are not geometrically compatible: real renderers need to represent them with different reference frames and coordinate schemes.
+While this incorrect code directly reflects the mathematical description above, the output is nonetheless incorrect:
+it produces the buggy output in Figure~\ref{fig:bunnybad}.
+
+% \xxx[a]{Let's put a real quick transition paragraph here to say something like: ``Unfortunately, this naive implementation has lots of bugs that reveal disconnects between the mathematical description above and the more specific computational implementation. We will describe each of those problems, which will motivate Gator's language design...''}
+% \xxx[dg]{Nah, there's really only one bug that leads to several issues.  I really like the transition straight into the issue here; that we're leading into what Gator does feels implicitly true by the structure of the section}
+
+\paragraph{Coordinate Systems}
+The underlying problem is that software needs to represent different vectors in different coordinate systems.
+Information needed to render the shape of a single graphical object, the positions and normal vectors, lies in the object's \emph{model space}, as can be seen in Figure~\ref{fig:spaces}.
+A model space represents the coordinates local to a single object in the scene.
+The origin of this space is centered in the model, with basis vectors matching the model orientation and scale.
+Both may change dynamically as time passes in the scene; however, each is fixed during a single iteration of the shader.
+\emph{World space} gives the absolute coordinates for the entire scene, so the basis vectors and origin of world space are typically fixed.
+
+Mesh data is scene independent, so we represent mesh parameters such as \code{fragPos} and \code{fragNorm} initially in model space, independent of the object's current relative position within the scene.
+In contrast, we represent the position of a light source relative to the entire scene---so \code{lightPos} is in world space.
+As a result, the subtraction expression \code{lightPos - fragPos} attempts to compare vectors represented in different spaces, yielding a geometrically meaningless result.
+This bug produces the incorrect output seen in Figure~\ref{fig:bunnybad}.
+
+\paragraph {Transformation Matrices} To fix this program, the shader needs to \emph{transform} the two vectors to a common coordinate system before subtracting them. 
+Mathematically, coordinate systems define an affine space, and thus geometric transformations on coordinate systems can be linear or affine.
+Affine transformations can change the origin and basis vectors, which can represent translation, while linear transformations affect only the basis vectors, which can represent rotation and scale. 
+
+These geometric transformations are represented in code as \emph{transformation matrices}.
+To apply a transformation to a vector, shader code uses matrix-vector multiplication. 
+For example, the shader application may provide a matrix \code{uModel} that defines the transformation from model to world space using matrix multiplication:
+\begin{lstlisting}
+vec3 lightDir = normalize(lightPos - <@\textcolor{darkolivegreen}{uModel * }@>fragPos));
+\end{lstlisting}
+
+\paragraph{Homogeneous Coordinates}
+Unfortunately, this matrix multiplication implementation introduces another bug.
+Transforming \code{fragPos} from model to world space requires both a linear scaling and rotation transformation and a translation to account for change of origins.
+This linear transformations with translation is represented by an \emph{affine transformation matrix}. 
+This is a problem: an affine transformation matrix for 3D vectors must be represented as a $4\times4$ matrix. To multiply this matrix by \code{fragPos} (which is a 3-dimensional vector), we need a sensible representation of \code{fragPos} as a 4-dimensional vector.
+It is thus not immediately clear by what vector we need to multiply:
+%
+\begin{lstlisting}
+vec3 lightDir = normalize(lightPos - <@\textcolor{darkolivegreen}{vec3(uModel *}@><@\textcolor{red}{?}@><@\textcolor{darkolivegreen}{)}@>);
+\end{lstlisting}
+%
+Because a 3$\times$3 Cartesian transformation matrix on 3-dimensional vectors can only express linear transformations, graphics software typically uses a second kind of coordinate system called \emph{homogeneous coordinates}.
+An $n$-dimensional vector in homogeneous coordinates uses $n+1$ values: the underlying Cartesian coordinates and a \emph{scaling factor}, $w$.
+A 4$\times$4 transformation matrix in homogeneous coordinates can express \emph{affine} transformations on the underlying 3-dimensional space, including translation.
+
+To convert from Cartesian to homogeneous coordinates, a vector $[x, y, z]$ becomes $[x, y, z, 1.]$;
+in the opposite direction, the homogeneous vector $[x, y, z, w]$ becomes $[x/w, y/w, z/w]$.
+To fix our example to use the 4-dimensional affine transformation \code{uModel}, we can extend \code{fragPos} into a homogeneous \code{vec4} value:
+%
+\begin{lstlisting}
+vec3 lightDir = normalize(
+  lightPos - <@\textcolor{darkolivegreen}{vec3(uModel * vec4(}@>fragPos<@\textcolor{darkolivegreen}{, 1.))}@>
+);
+\end{lstlisting}
+%
+The GLSL functions \code{vec4} and \code{vec3} extend a 3-dimensional vector with the given component and truncate a 4-dimensional vector, respectively. We now have a \code{lightDir} in a consistent coordinate system, namely in the world space.
+
+The final calculation of the diffuse intensity uses this expression:
+%
+\begin{lstlisting}
+max(dot(lightDir, normalize(fragNorm)), 0.)
+\end{lstlisting}
+%
+Here, \code{fragNorm} resides in model space and should be transformed into world space. One tricky detail, however, is that \code{fragNorm} denotes a \emph{direction}, as opposed to a \emph{position} as in \code{fragPos}. 
+These require different geometric representations, because a direction should not be affected by translation. 
+Fortunately, there is a trick to avoid this issue while still permitting the use of our nice homogeneous coordinate representation.
+By extending \code{fragNorm} with $w = 0$, affine translation is not applied. 
+%
+\begin{lstlisting}
+return max(dot(lightDir, normalize(
+  <@\textcolor{darkolivegreen}{vec3(uModel * vec4(}@>fragNorm<@\textcolor{darkolivegreen}{, 0.))}@>
+);
+\end{lstlisting}
+%
+This subtle difference is a common source of errors, particularly for novice programmers. 
+Finally, we have a correct GLSL implementation of \code{diffuse}. This version results in the correct output in Figure~\ref{fig:bunnygood}. 
+
+\section{Geometry Types}
+\label{sec:langlang}
+
+The problems in the previous section arise from the gap between the abstract math and the concrete implementation in code.
+We classify this kind of bug, when code performs geometrically meaningless operations, as a \emph{geometry error}.
+Gator provides a framework for declaring a type system that can define and catch geometry errors in programs.
+
+The core concept in Gator is the introduction of \emph{geometry types}.
+These types refine simple GLSL-like vector data types, such as \code{vec3} and \code{mat4}, with information about the geometric object they represent.
+A geometry type consists of three components:
+%
+\begin{itemize}
+\item The \emph{reference frame} defines the position and orientation of the coordinate system. A reference frame is determined by its basis vectors and origin. Examples of reference frames are model, world, and projective space. 
+\item The \emph{coordinate scheme} describes a coordinate system by providing operation and object definitions, such as homogeneous and Cartesian coordinates. Coordinate schemes expresses how to represent an abstract value computationally, which identifies what the underlying GLSL-like type is.
+\item The \emph{geometric object} describes which geometric construct the data represents, such as a point, vector, or transformation.
+\end{itemize}
+%
+In Gator, the syntax for a geometry type is 
+%
+\code{scheme<frame>.object}
+%
+This notation invokes both module members and parametric polymorphism.
+Coordinate schemes are parameterized by a reference frame, while geometric objects are member types of a parameterized scheme.
+For example, \code{cart3<world>.point} is the type of a point lying in world space represented in a 3D Cartesian coordinate scheme.
+
+The three geometry type components suffice to rule out the errors described in Section~\ref{sec:example}.
+The rest of the section details each component. 
+
+\subsection{Reference Frames}
+\label{subsec:geotypes}
+We can enhance the mathematical diffuse light computation above using geometry types:
+%
+\begin{lstlisting}
+float diffuseNaive(
+  <@\textcolor{darkolivegreen}{cart3<world>.point}@> lightPos, 
+  <@\textcolor{darkolivegreen}{cart3<model>.point}@> fragPos, 
+  <@\textcolor{darkolivegreen}{cart3<model>.direction}@> fragNorm) {
+    cart3<world>.direction lightDir = 
+      normalize(lightPos - fragPos);
+    return max(dot(lightDir, normalize(fragNorm)), 0.0);
+}
+\end{lstlisting}
+%
+With these stronger types, the expression \code{lightPos - fragPos} in this function is an error, since \code{lightPos} and \code{fragPos} are in different frames. 
+It is geometrically legal to subtract two positions to produce a vector; the only issue with this code is the difference of reference frames.  
+We will further discuss how Gator determines subtraction is legal in Section~\ref{subsec:schemes}.
+
+\paragraph{Definition}
+Reference frames in Gator are labels with an integer dimension.  The dimension of a frame specifies the number of linearly independent basis vectors which make up the frame. Gator does not require explicit basis vectors for constructing frames; keeping basis vectors implicit helps minimize programmer requirements and helps avoid cluttering definitions with information we don't really need.
+We will discuss what keeps these basis vectors are implicit through transformations between reference frames in Section~\ref{sec:in}.
+
+The Gator syntax to declare the three-dimensional model and world frames is:
+%
+\begin{lstlisting}
+frame model has dimension 3;
+frame world has dimension 3;
+\end{lstlisting}
+%
+\subsection{Coordinate Schemes}
+\label{subsec:schemes}
+
+To transform \code{fragPos} and \code{fragNormal} to the \code{world} reference frame, we need to provide an affine transformation matrix \code{uModel}.
+%
+\begin{lstlisting}
+float diffuse(
+  cart3<world>.point lightPos, 
+  cart3<model>.point fragPos, 
+  cart3<model>.direction fragNorm,
+    <@\textcolor{darkolivegreen}{hom3<model>}@>.transformation<world> uModel) {
+  cart3<world>.direction lightDir = 
+    normalize(lightPos - (uModel * fragPos));
+  return max(dot(lightDir, 
+    normalize(<@\textcolor{darkolivegreen}{uModel *} fragNorm)), 0.0);
+}
+\end{lstlisting}
+%
+For this example, we define matrix--vector multiplication \code{$m$ * $v$} to update types akin to function application: it ensures that $m$ is a transformation in the same frame as the vector and parameterized on the destination frame $f$, then produces an output direction in the frame $f$.
+With this definition, multiplying \code{uModel} by an object in the \code{model} reference frame will result in an object in the \code{world} frame.
+
+Unfortunately, multiplying \code{uModel * fragPos} produces a Gator type error since \code{uModel} and \code{fragPos} are in different coordinate schemes.
+We will resolve this issue in the next subsection by converting between schemes.
+
+\paragraph{Definition}
+Coordinate schemes provide definitions of geometric objects and operations.
+Concretely, they consist of operation type declarations and concrete definitions for member objects and operations.
+Geometric operations defined in coordinate schemes are expected to provide geometrically correct code, and are generally intended (though not required) to operate between objects within the coordinate scheme.
+Recall that, instead of ``baking in'' a particular notion of geometry, Gator lets coordinate schemes provide types that define correctness for a given set of geometric operations.
+%
+\begin{lstlisting}
+with frame(3) r:
+coordinate cart3 : geometry {
+  object vector is float[3];
+  ...
+}
+\end{lstlisting}
+For example, we can define 3D vector addition in Cartesian coordinates, which consists of adding the components of two vectors together.
+\begin{lstlisting}
+vector +(vector v1, vector v2) {
+   return [v1[0] + v2[0], v1[1] + v2[1], v1[2] + v2[2]];
+}
+\end{lstlisting}
+%
+All coordinate schemes are required to be parameterized with reference frames, so \code{cart3<model>} and \code{cart3<world>} are different instantiations of the same scheme.
+Gator's \code{with} syntax provides parametric polymorphism in the usual sense; in this example, the 3-dimensional Cartesian coordinate scheme is polymorphic over all 3-dimensional reference frames.
+
+\subsection{Geometric Objects}
+\label{subsec:objects}
+
+To apply the \code{uModel} affine transformation to our position and normal, we first need to convert each to homogeneous coordinates.  Recall from Section~\ref{subsec:wrong}, however, that this coordinate system transformation \emph{differs for points and directions}.
+To capture this distinction, we introduce the overloaded function \code{homify}:\footnote{For simplicity, this example \code{homify} is written only for objects in the \code{model} frame.  Gator supports function parameterization on reference frames, so we would normally write \code{homify} to work on any frame.}
+%
+\begin{lstlisting}
+hom<model>.point homify(cart3<model>.point p) {
+  return [p[0], p[1], p[2], 1.]; 
+} 
+hom<model>.direction homify(cart3<model>.direction p) {
+  return [p[0], p[1], p[2], 0.]; 
+}
+\end{lstlisting}
+%
+Unlike Cartesian coordinates, homogeneous coordinates have different representations for points and directions: the latter must have zero for its last coordinate, $w$.
+
+To send \code{fragPos} and \code{fragNorm} to homogeneous coordinates, it suffices to call \code{homify} and let the Gator compiler select the correct overloaded variant:
+%
+\begin{lstlisting}
+homify(fragPos);  // Extends fragPos with w=1.
+homify(fragNorm); // Extends fragNorm with w=0.
+\end{lstlisting}  
+%
+We repeat this process to define the function \code{reduce}, which maps homogeneous to Cartesian coordinates.  Finally, we apply these functions to our model:
+%
+\begin{lstlisting}
+float diffuse(
+  cart3<world>.point lightPos, 
+  cart3<model>.point fragPos, 
+  cart3<model>.direction fragNorm,
+    hom3<model>}.transformation<world> uModel) {
+    cart3<world>.direction lightDir = normalize(lightPos - 
+      <@\textcolor{darkolivegreen}{reduce}@>(uModel * <@\textcolor{darkolivegreen}{homify(}@>fragPos<@\textcolor{darkolivegreen}{)}@>));
+  return max(dot(lightDir,
+    normalize(<@\textcolor{darkolivegreen}{reduce}@>(uModel * <@\textcolor{darkolivegreen}{homify(}@>fragNorm)))
+    0.0));
+}
 \end{lstlisting}
 %
 Now, by using all three components of the geometry type, our code will compile and produce the correct Phong diffuse color shown in Figure~\ref{fig:bunnygood}.
@@ -418,13 +423,13 @@ Object type definitions can be parameterized on reference frames, such as writin
 For example, we can define some objects in homogeneous coordinates:
 %
 \begin{lstlisting}
-	coordinate hom3 : geometry {
-		object point is float[4];
-		object direction is float[4];
-		with frame(3) r:
-		object transformation is float[4][4];
-		...
-	}
+coordinate hom3 : geometry {
+  object point is float[4];
+  object direction is float[4];
+  with frame(3) r:
+  object transformation is float[4][4];
+  ...
+}
 \end{lstlisting}
 %
 Object and type declarations in Gator extend existing types; for example, here \code{point} is defined as a subtype of \code{float[4]}.
@@ -444,15 +449,16 @@ obscures the underlying computation and can quickly become out of date, such as 
 % Transforming between \code{model} and \code{world} is a simple example of these challenges, requiring two function calls and a matrix multiplication each time we apply this transformation:
 %
 \begin{lstlisting}
-	cartesian<world>.direction worldNorm = 
-	normalize(lightPos - reduce(uModel * homify(fragNorm)));
+cartesian<world>.direction worldNorm = 
+  normalize(lightPos - reduce(uModel * homify(fragNorm)));
 \end{lstlisting}
 %
 %\xxx[dg]{Give more intuition for why in expressions are useful and a viable abstraction in this context}
 We extend Gator with an \code{in} expression that generates equivalent code automatically:
 %
 \begin{lstlisting}
-	cartesian<world>.direction worldNorm = normalize(lightPos - fragNorm in world);
+cartesian<world>.direction worldNorm = 
+  normalize(lightPos - fragNorm in world);
 \end{lstlisting}
 %
 The new expression converts a vector into a given representation by generating the appropriate function calls and matrix--vector multiplication.
@@ -503,7 +509,8 @@ To expand on condition (3); canonical functions may take in \emph{canonical argu
 		...
 	}
 	...
-	// Now declare the matrix as canonical for use with multiplication
+	// Now declare the matrix as canonical 
+	// for use with multiplication
 	canon hom<model>.transformation<world> uModel;
 	homPos in world; // --> uModel * homPos
 \end{verbatim}
@@ -1224,5 +1231,3 @@ In Gator, users can write libraries to encode domain-specific forms of geometry:
 We hope to expand Gator's standard library as we apply it to an expanding set of domains.
 
 \bibliography{venues,refs}
-
-\end{document}

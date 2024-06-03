@@ -1,7 +1,5 @@
-\documentclass[../main.tex]{subfiles}
+%\documentclass[../main.tex]{subfiles}
 %
-
-\begin{document}
 
 \section{Introduction}
 \label{introduction}
@@ -14,63 +12,55 @@ Specifically, given a variable \code{x} of type \code{meters}, applying the cast
 Which path is taken depends on the compiler; we would like the choice of paths to be semantically equivalent so the compiler is free to make a choice.
 
 \begin{figure}[]
-    \centering
-    \begin{subfigure}{0.4\textwidth}
-        \centering
-        \begin{verbatim}
-        var x : meters = 1;
-        define foot:
-            1 meter = 3.28 feet;
-        define miles:
-            1 meter = 0.000621 miles;
-        define wugs:
-            1 mile = 10000 wugs;
-            1 foot = 10 wugs;
-        var y : wugs = (wugs) x;
-        \end{verbatim}
-        \vspace{-3ex}
-        \caption{A sample program with user defined type conversion.}
-    \end{subfigure}
-
-    \begin{subfigure}{0.4\textwidth}
-        \hspace{-20pt}
-        \begin{tikzpicture}[scale=0.2]
-            \tikzstyle{every node}+=[inner sep=0pt]
-            \draw [black] (32.8,-8.8) circle (3);
-            \draw (32.8,-8.8) node {$meters$};
-            \draw [black] (21.5,-21.4) circle (3);
-            \draw (21.5,-21.4) node {$feet$};
-            \draw [black] (43.7,-21.4) circle (3);
-            \draw (43.7,-21.4) node {$miles$};
-            \draw [black] (32.4,-33.6) circle (3);
-            \draw (32.4,-33.6) node {$wugs$};
-            \draw [black] (30.8,-11.03) -- (23.5,-19.17);
-            \fill [black] (23.5,-19.17) -- (24.41,-18.9) -- (23.66,-18.24);
-            \draw (26.61,-13.64) node [left] {$\times 3.28$};
-            \draw [black] (34.76,-11.07) -- (41.74,-19.13);
-            \fill [black] (41.74,-19.13) -- (41.59,-18.2) -- (40.84,-18.85);
-            \draw (43.7,-13) node [left] {$\times 6.21 \times 10^{-4}$};
-            \draw [black] (23.5,-23.64) -- (30.4,-31.36);
-            \fill [black] (30.4,-31.36) -- (30.24,-30.43) -- (29.5,-31.1);
-            \draw (26.41,-28.96) node [left] {$\times 10$};
-            \draw [black] (41.66,-23.6) -- (34.44,-31.4);
-            \fill [black] (34.44,-31.4) -- (35.35,-31.15) -- (34.62,-30.47);
-            \draw (37.52,-26.04) node [left] {$\times 10^4$};
-            \draw [dashed] (29.441,-34.049) arc (-88.02206:-273.82603:12.915);
-            \fill [black] (29.44,-34.05) -- (28.62,-33.58) -- (28.66,-34.58);
-            \draw (15.56,-20.93) node [left] {$\times 32.8$};
-            \draw [dashed] (35.77,-8.425) arc (90.49177:-92.33986:12.828);
-            \fill [black] (35.36,-34.07) -- (36.13,-34.6) -- (36.18,-33.6);
-            \draw (49.23,-21.46) node [right] {$\times 6.21$};
-            \end{tikzpicture}
-        \caption{Diagram for the type conversions in the program.}
-    \end{subfigure}
-    \vspace{-2ex}
+    \begin{verbatim}
+var x : meters = 1;
+define foot:
+    1 meter = 3.28 feet;
+define miles:
+    1 meter = 0.000621 miles;
+define wugs:
+    1 mile = 10000 wugs;
+    1 foot = 10 wugs;
+var y : wugs = (wugs) x;
+    \end{verbatim}
+\caption{A sample program with user defined type conversion.}
+\end{figure}
+%
+\begin{figure}
+    \begin{tikzpicture}[scale=0.2]
+        \tikzstyle{every node}+=[inner sep=0pt]
+        \draw [black] (32.8,-8.8) circle (3);
+        \draw (32.8,-8.8) node {$meters$};
+        \draw [black] (21.5,-21.4) circle (3);
+        \draw (21.5,-21.4) node {$feet$};
+        \draw [black] (43.7,-21.4) circle (3);
+        \draw (43.7,-21.4) node {$miles$};
+        \draw [black] (32.4,-33.6) circle (3);
+        \draw (32.4,-33.6) node {$wugs$};
+        \draw [black] (30.8,-11.03) -- (23.5,-19.17);
+        \fill [black] (23.5,-19.17) -- (24.41,-18.9) -- (23.66,-18.24);
+        \draw (26.61,-13.64) node [left] {$\times 3.28$};
+        \draw [black] (34.76,-11.07) -- (41.74,-19.13);
+        \fill [black] (41.74,-19.13) -- (41.59,-18.2) -- (40.84,-18.85);
+        \draw (43.7,-13) node [left] {$\times 6.21 \times 10^{-4}$};
+        \draw [black] (23.5,-23.64) -- (30.4,-31.36);
+        \fill [black] (30.4,-31.36) -- (30.24,-30.43) -- (29.5,-31.1);
+        \draw (26.41,-28.96) node [left] {$\times 10$};
+        \draw [black] (41.66,-23.6) -- (34.44,-31.4);
+        \fill [black] (34.44,-31.4) -- (35.35,-31.15) -- (34.62,-30.47);
+        \draw (37.52,-26.04) node [left] {$\times 10^4$};
+        \draw [dashed] (29.441,-34.049) arc (-88.02206:-273.82603:12.915);
+        \fill [black] (29.44,-34.05) -- (28.62,-33.58) -- (28.66,-34.58);
+        \draw (15.56,-20.93) node [left] {$\times 32.8$};
+        \draw [dashed] (35.77,-8.425) arc (90.49177:-92.33986:12.828);
+        \fill [black] (35.36,-34.07) -- (36.13,-34.6) -- (36.18,-33.6);
+        \draw (49.23,-21.46) node [right] {$\times 6.21$};
+    \end{tikzpicture}
     \caption{In this sample program, the user implicitly defines two ways to cast variable a from meters to the new unit wugs.
     The definitions are different, and a compiler performing implicit conversion would not know which to choose.}
     \label{fig:typeExample}
 \end{figure}
-
+%
 This paper is about efficiently checking commutativity in diagrams that arise in real systems.
 We assume a simple equivalence checker for individual transformation functions: in our type system example, for instance, it is possible to check transformation equivalence by comparing the conversion factors.
 Our aim is to analyze the graph of transformations and minimize the number of times we need to perform an equivalence check.
@@ -173,7 +163,7 @@ This narrowing can be done because the original diagram commutes.
 Pairs where both paths do not involve the new edge would remain equal (this would apply to cycles too; cycles that do not pass through the new edge must be the identity).
 Also, pairs where both paths involved the new edge would have to be equal.
 To see why this is true, each path could be thought of as consisting of the composition of three segments.
-For path pair $p$, and new edge from node $S$ to node $T$, the first segment extends from $\partial(p)^+$ to $S$, the second, the new edge $(S, T)$ itself, and the third, from $T$ to $\partial(p)^-$.
+For path pair $p$, and new edge from node $S$ to node $T$, the first segment extends from $\partial(p)^+$ to $S$, the second, the new edge $(S, T)$ itself, and the third, from $T$ to $\partial(p)^{-}$.
 The new edge could only appear once because cycles have already been dealt with so only pairs where the path includes the new edge once need be checked.
 The first segment of both pairs would have to be equal because they existed as parallel pairs in the original diagram, and similarly the third segment would also have to be equal.
 The second segment, consisting of the same edge, would also have to be equal because the equivalence oracle is reflexive.
@@ -191,7 +181,7 @@ In the second phase, only forward edges are accepted, and in the third phase, ag
 For a two flip tolerant path $p$, let $t_1(p)$ map to the first phase, $t_2(p)$, to the second, and $t_3(p)$, to the third.
 The node between the first two phases we refer to as the \textit{first flipping point}, which has both edges pointing outward; similarly, we refer to the node between the latter two phases as the \textit{second flipping point}, at which both edges point inwards.
 
-We present the idea diagrammatically in Figure~\ref{figure_two_flip}.
+We present the idea diagrammatically in Figure~\ref{figure-two-flip}.
 Squiggly arrows represent path phases (these are the composition of zero or more edges, not a single edge).
 The new edge is represented with a dashed arrow.
 Here, $f_1 ; f_2 ; f_3$ is a two flip path, and $f_1 ; (S, T) ; f_3$ is a new path created because of the addition of ($S$,$T$) that forms a parallel pair with $f_2$.
@@ -223,13 +213,13 @@ Here, $f_1 ; f_2 ; f_3$ is a two flip path, and $f_1 ; (S, T) ; f_3$ is a new pa
 \end{tikzpicture}
 \end{center}
 \caption{Two flip tolerant path.}
-\label{figure_two_flip}
+\label{figure-two-flip}
 \end{figure}
 
 The two flip tolerant path search returns the set of all paths between a given source and sink that have up to two flips (paths with zero or one flip are also accepted).
 
 \paragraph{Path extraction algorithm}
-Next, the \textit{path extraction algorithm} then transforms the output of the two flip path search into the verification set, $\mathcal{Q}' \cup \mathcal{C}'$.
+Next, the \textit{path extraction algorithm} th en transforms the output of the two flip path search into the verification set, $\mathcal{Q}' \cup \mathcal{C}'$.
 Given a set of two flip tolerant paths from the new edge source to sink, the algorithm outputs a set of pairs to verify.
 
 Let the new edge added to the diagram be $(S, T)$ and the input set of paths, $\mathcal{P}$.
@@ -256,7 +246,7 @@ We conclude our discussion of this incremental algorithm by proving that the res
     Every element in the output of the path extraction algorithm was by construction an element of $\mathcal{O}$. Every cycle in $\mathcal{C}'$ can be expressed as $(S, T) ; p$, and corresponds to the input two flip tolerant path $p$.
     
     It remains to show that every new parallel pair $p$ in $\mathcal{Q}'$ corresponds to a two flip tolerant path.
-    Let $\partial(p)^+ = F_1$ and $\partial(p)^- = F_2$. 
+    Let $\partial(p)^+ = F_1$ and $\partial(p)^{-} = F_2$. 
     Only one path passes through $(S, T)$. Let it be called $p_1$, and the other path, $p_2$.
     The two flip tolerant path from $S$ to $T$ can be constructed as follows: phase 1 is the segment of $p_1$ from $F_1$ to $S$, phase 2 is $p_2$, and phase 3 is the segment of $p_1$ from $T$ to $F_2$.
     Effectively, $F_1$ corresponds to the first flipping point, and $F_2$, to the second.
@@ -302,10 +292,10 @@ We eliminate Bilinkings until we reach a minimum ``spanning'' subset.
 
 Roughly, the algorithm proceeds by first efficiently finding a \textit{spanning} set of bilinkings (a subset whose verification implies the verification of all bilinkings in the graph).
 It does this, starting at every node, by finding the reachable subsection of the graph, and a spanning tree for the subsection.
-From each edges in the reachable section that is not a part of the tree, it generates a bilinking using the edge and a path in the tree that is parallel to the edge (\ref{algo_spanning_set}).
+From each edges in the reachable section that is not a part of the tree, it generates a bilinking using the edge and a path in the tree that is parallel to the edge (\ref{algo-spanning-set}).
 
 \begin{algorithm}[tb]
-\label{alg_spanning_set}
+\label{alg-spanning-set}
 \DontPrintSemicolon
 \KwResult{Find a spanning set Rs = [$r_1$, ... ,$r_k$].}
 
@@ -323,10 +313,10 @@ $R_s$ $\gets$ \{\}\;
 }
 \KwRet{$R_s$}\;
 
-\caption{Finding a spanning set of path pairs, as in section ~\ref{sec:batchBaseline}.}\label{algo_spanning_set}
+\caption{Finding a spanning set of path pairs, as in section ~\ref{sec:batchBaseline}.}\label{algo-spanning-set}
 \end{algorithm}
 
-With the spanning set thus initialized, it greedily tries to remove each pair from the spanning set if the set remains spanning even after removing the edge (~\ref{algo_minimal_spanning_set}).
+With the spanning set thus initialized, it greedily tries to remove each pair from the spanning set if the set remains spanning even after removing the edge (~\ref{algo-minimal-spanning-set}).
 
 \begin{algorithm}[tb]
 \DontPrintSemicolon
@@ -357,7 +347,7 @@ R $\gets$ Rs\;
 }
 \KwRet{R}\;
 
-\caption{Finding a minimal spanning set, as described in section ~\ref{sec:batchBaseline}.}\label{algo_minimal_spanning_set}
+\caption{Finding a minimal spanning set, as described in section ~\ref{sec:batchBaseline}.}\label{algo-minimal-spanning-set}
 \end{algorithm}
 
 The proof of correctness can be found in Murota\cite{commutative}.
@@ -370,7 +360,7 @@ As in the online baseline algorithm, we do not concern ourselves with parallel p
 
 The key observation allowing us to improve on the online baseline is a result of Theorem~\ref{reductionRule} (which we expand on later): for a given source and sink pair, only a single parallel pair needs to be verified.
 It is straightforward to see that, should our selected set of pairs and cycles passing through the new edge be verified commutative, the entire diagram must commute.
-\ref{algo_online_polynomial} uses this strategy of identifying a parallel pair with exactly one path through the edge for each (source, sink) pair.
+\ref{algo-online-polynomial} uses this strategy of identifying a parallel pair with exactly one path through the edge for each (source, sink) pair.
 
 \begin{algorithm}[tb]
 \DontPrintSemicolon
@@ -412,7 +402,7 @@ parallelPairs $\gets$ \{\}\;
 }
 \KwRet{parallelPairs}\;
 \caption{Online polynomial time algorithm to find parallel pair set.}
-\label{algo_online_polynomial}
+\label{algo-online-polynomial}
 \end{algorithm}
 
 The \code{try} block is executed at most $O(|V|^2)$ times, which is also the bound on the number of pairs verified.
@@ -429,7 +419,7 @@ In such an implementation, path finding from a given source node to all potentia
 
 In the case where equality checks are very expensive, we begin by finding the minimal set of (source, sink) pairs such that checking for these pairs logically implies having checked the full diagram.
 
-If \ref{algo_online_polynomial} were applied to the diagram shown in Figure~\ref{figure_reduction_rule} there would be redundancies in the output.
+If \ref{algo-online-polynomial} were applied to the diagram shown in Figure~\ref{figure-reduction-rule} there would be redundancies in the output.
 It turns out that verifying $g_2=f_2 ; n ; h_2$ is sufficient to ensure the diagram still commutes on the addition of $n$.
 
 \begin{figure}
@@ -479,8 +469,8 @@ It turns out that verifying $g_2=f_2 ; n ; h_2$ is sufficient to ensure the diag
 \end{center}
 \caption{Reduction rule.
 Each arrow represents a path, where $n$ is the new edge being added.
-While ~\ref{algo_online_polynomial} returns two pairs for verification, one from $P_1$ to $P_2$ and the other from $Q_1$ to $Q_2$, it actually suffices to just check a pair from $Q_1$ to $Q_2$ as demonstrated in theorem ~\ref{reductionRule}.}
-\label{figure_reduction_rule}
+While ~\ref{algo-online-polynomial} returns two pairs for verification, one from $P_1$ to $P_2$ and the other from $Q_1$ to $Q_2$, it actually suffices to just check a pair from $Q_1$ to $Q_2$ as demonstrated in theorem ~\ref{reductionRule}.}
+\label{figure-reduction-rule}
 \end{figure}
 
 \begin{theorem}
@@ -505,7 +495,7 @@ Given that a set of path pairs are equal, suppose we attempt to derive the propo
 
 That is to say, if verifying a comparable pair of paths with end points ($P_1$, $P_2$) implies the verification of a pair with endpoints ($Q_1$, $Q_2$), then it must be that $Q_1$ is a successor of $P_1$ and $P_2$ is a successor of $Q_2$. %TODO proof required?
 
-Using this information it is possible to choose a minimal subset of path pairs to verify, as in \ref{algo_online_minimal}.
+Using this information it is possible to choose a minimal subset of path pairs to verify, as in \ref{algo-online-minimal}.
 %
 To summarize this algorithm conceptually, we start by constructing a graph with a node for each possible (source, sink) pair in the graph: each node then represents a possible choice for parallel pair endpoint pairs. Edges are drawn from node ($P_1$, $P_2$) to ($Q_1$, $Q_2$) if $Q_1$ is a successor of $P_1$ and $P_2$ is a successor of $Q_2$. We greedily search for the smallest set of nodes from which the entire graph would be reachable. The idea is to look for ``roots'' in the graph that have to be included in the ultimate verification set because they have no predecessor in the graph and cannot be verified ``through'' the verification of some other pair. Then all the successors whose verification is implied by the roots are eliminated.
 
@@ -544,7 +534,7 @@ verificationSet $\gets$ \{\}\;
 }
 \KwRet{verificationSet}\;
 \caption{Minimal set finding algorithm.}
-\label{algo_online_minimal}
+\label{algo-online-minimal}
 \end{algorithm}
 
 At the end of the greedy graph reduction we are left with the unique set of root nodes.
@@ -570,7 +560,7 @@ Specifically, Gator introduces transformations between \textit{reference frames}
 
 There are several examples of reasonably complicated transformation graphs that we can pick from.  Gator includes graphics examples as part of its examples package, all of which are in the Gator paper; for this evaluation, we looked at the \textit{phong}, \textit{reflection}, and \textit{shadow map} examples.
 
-We implemented a system for interfacing between the optimal set path checker (\ref{algo_online_minimal}) in the open-source implementation of Gator.
+We implemented a system for interfacing between the optimal set path checker (\ref{algo-online-minimal}) in the open-source implementation of Gator.
 The system was tested with intentional bugs, of which it found them all, although no ``real'' bugs were found.  The graphs used were of size 5 or less; for graphs of this size, the checker was able to run in real time with no noticeable loss of frames.  Since the program is running at 60 frames per second, the checker was running at a rate faster than .01 seconds.
 
 \subsection{Currency Graph}
@@ -582,7 +572,7 @@ Since the exchange rate of money from any given base currency to a target curren
 
 Using a web API\footnote{https://exchangeratesapi.io} for currency data, we built the fully connected diagram of exchange rates between 32 currencies on a given day.
 To ensure that it indeed commuted, we started with an empty diagram, and added in edges one by one.
-Before the addition of each edge, we used the algorithms (\ref{algo_online_polynomial} and ~\ref{algo_online_minimal}, the online polynomial and online minimal set algorithms, respectively) to ensure the addition of a new edge did not introduce inconsistencies in the existing diagram.
+Before the addition of each edge, we used the algorithms (\ref{algo-online-polynomial} and ~\ref{algo-online-minimal}, the online polynomial and online minimal set algorithms, respectively) to ensure the addition of a new edge did not introduce inconsistencies in the existing diagram.
 If a new edge was problematic, the algorithms returned an example inconsistent pair that would arise from the addition of the edge.
 The pair would consist of two currency transformation sequences with the same source currency and ultimate destination currency, but with different effective exchange rates values, as computed by taking the product of all the exchange rates encountered through the chain.
 
@@ -590,9 +580,9 @@ We allowed an ``error tolerance'' so that differences reported would not be the 
 However, this relaxation of the equality oracle into imprecision meant that the mathematical reasoning that allow the algorithms to remove redundant path checks no longer applied.
 For instance, composing a new function with two approximately equal functions does not lead to equal results, so Theorem~\ref{reductionRule} fails with this approximate equality.
 When the algorithms reported no inconsistencies, it was still possible that the graph possessed inconsistencies above the given threshold and did not commute.
-Nonetheless, both algorithms were effective in catching inconsistencies. \ref{algo_online_polynomial} started finding inconsistencies at error tolerances to the order of $10^{-3}$, and \ref{algo_online_minimal}, which makes more invalid redundant path check removals, at error tolerances to the order of $10^{-7}$.
+Nonetheless, both algorithms were effective in catching inconsistencies. \ref{algo-online-polynomial} started finding inconsistencies at error tolerances to the order of $10^{-3}$, and \ref{algo-online-minimal}, which makes more invalid redundant path check removals, at error tolerances to the order of $10^{-7}$.
 
-Averaging over evaluation for the first 30 days of 2020, building and verifying a diagram to completion (inclusive of the time required by network calls) took 243$\pm$19 seconds using \ref{algo_online_minimal}, and in 133$\pm$13 seconds with \ref{algo_online_polynomial}.
+Averaging over evaluation for the first 30 days of 2020, building and verifying a diagram to completion (inclusive of the time required by network calls) took 243$\pm$19 seconds using \ref{algo-online-minimal}, and in 133$\pm$13 seconds with \ref{algo-online-polynomial}.
 For this large of a graph and data set, these times are reasonable and show these algorithms can be used in a realistic setting.
 Finding actual inconsistencies further shows the value of using these algorithms and commutative diagrams in the real world.
 
@@ -602,8 +592,8 @@ We compare performance of the following path checking algorithms:
 (1) the na\"{i}ve baseline,
 (2) the less na\"{i}ve two-flip baseline,
 (3) the batch baseline,
-(4) \ref{algo_online_polynomial}, the non-minimal polynomial-time algorithm, and
-(5) \ref{algo_online_minimal}, the minimal set finding algorithm.
+(4) \ref{algo-online-polynomial}, the non-minimal polynomial-time algorithm, and
+(5) \ref{algo-online-minimal}, the minimal set finding algorithm.
 The two metrics we evaluate are time for response and size of response set (smaller sets---tighter output results---would mean less calls to the oracle).
 We use randomly generated graphs of varying size: given a graph and a new edge, we time how long it takes for an algorithm to return the set of pairs that need to be verified.
 All computations were performed on a MacBook Pro 2015, 2.9 GHz dual-core Intel Core i5.
@@ -620,8 +610,8 @@ The average time taken by each algorithm over the course of 10 runs over randoml
     Na\"{i}ve baseline & 0.77 \\
     Two Flip tolerant & 0.075 \\
     Batch algorithm & 7.55 \\
-    ~\ref{algo_online_polynomial} & 0.0038 \\
-    ~\ref{algo_online_minimal} & 0.00086 \\
+    ~\ref{algo-online-polynomial} & 0.0038 \\
+    ~\ref{algo-online-minimal} & 0.00086 \\
     \bottomrule
 \end{tabular}
 \label{tab:times}
@@ -636,74 +626,60 @@ The average time taken by each algorithm over the course of 10 runs over randoml
     Na\"{i}ve baseline & 39754.9 \\
     Two Flip tolerant & 748.9 \\
     Batch algorithm & 23 \\
-    ~\ref{algo_online_polynomial} & 78.3 \\
-    ~\ref{algo_online_minimal} & 1 \\
+    ~\ref{algo-online-polynomial} & 78.3 \\
+    ~\ref{algo-online-minimal} & 1 \\
     \bottomrule
 \end{tabular}
 \label{tab:sizes}
 \end{table}
 
-\begin{figure*}
-    \begin{subfigure}{0.35\linewidth}
-      \includegraphics[width=\linewidth,trim=0 0 5 30,clip]{timeVsSize_10_OptimalSet.pdf}
-      \caption{~\ref{algo_online_minimal}.}
-      \label{fig:sfigOptimalTvsS}
-    \end{subfigure}
-    %
-    \hspace{-20pt}
-    %
-    \begin{subfigure}{0.35\linewidth}
-      \includegraphics[width=\linewidth,trim=0 0 5 30,clip]{timeVsSize_10_Polynomial.pdf}
-      \caption{~\ref{algo_online_polynomial}.}
-      \label{fig:sfigPolynomialTvsS}
-    \end{subfigure}
-    %
-    \hspace{-20pt}
-    %
-    \begin{subfigure}{0.35\linewidth}
-      \includegraphics[width=\linewidth,trim=0 0 5 30,clip]{timeVsSize_10_NaiveChecker.pdf}
-      \caption{Naive baseline.}
-      \label{fig:sfigNaiveTvsS}
-    \end{subfigure}
-
-    \begin{subfigure}{0.35\linewidth}
-      \includegraphics[width=\linewidth,trim=0 0 5 30,clip]{timeVsSize_10_TwoFlipPathChecker.pdf}
-      \caption{Two flip tolerant baseline.}
-      \label{fig:sfigTwoFlipTvsS}
-    \end{subfigure}
-    %
-    \hspace{-20pt}
-    %
-    \begin{subfigure}{0.35\linewidth}
-      \includegraphics[width=\linewidth,trim=0 0 5 30,clip]{timeVsSize_10_BatchChecker.pdf}
-      \caption{Batch algorithm baseline.}
-      \label{fig:sfigBatchTvsS}
-    \end{subfigure}
-    \caption{Running time for various algorithms as input graph size and density scale.}
-    \label{fig:timeVsSize}
-\end{figure*}
+\begin{figure}
+  \includegraphics[width=\linewidth,trim=0 0 5 30,clip]{fig/timeVsSize-10-OptimalSet.pdf}
+  \caption{~\ref{algo-online-minimal}.}
+  \label{fig:sfigOptimalTvsS}
+\end{figure}
+%
+\begin{figure}
+  \includegraphics[width=\linewidth,trim=0 0 5 30,clip]{fig/timeVsSize-10-Polynomial.pdf}
+  \caption{~\ref{algo-online-polynomial}.}
+  \label{fig:sfigPolynomialTvsS}
+\end{figure}
+%
+\begin{figure}
+  \includegraphics[width=\linewidth,trim=0 0 5 30,clip]{fig/timeVsSize-10-NaiveChecker.pdf}
+  \caption{Naive baseline.}
+  \label{fig:sfigNaiveTvsS}
+\end{figure}
+%
+\begin{figure}
+  \includegraphics[width=\linewidth,trim=0 0 5 30,clip]{fig/timeVsSize-10-TwoFlipPathChecker.pdf}
+  \caption{Two flip tolerant baseline.}
+  \label{fig:sfigTwoFlipTvsS}
+\end{figure}
+%
+\begin{figure}
+  \includegraphics[width=\linewidth,trim=0 0 5 30,clip]{fig/timeVsSize-10-BatchChecker.pdf}
+  \caption{Batch algorithm baseline.}
+  \label{fig:sfigBatchTvsS}
+\end{figure}
+\begin{figure}
+  \includegraphics[width=\linewidth]{fig/variance-10-OptimalSet.pdf}
+  \caption{~\ref{algo-online-minimal}.}
+  \label{fig:sfigOptimalSpread}
+  \caption{Spreads of algorithm running times.}
+\end{figure}
 
 \begin{figure}
-    \begin{subfigure}{\linewidth}
-      \includegraphics[width=\linewidth]{variance_10_OptimalSet.pdf}
-      \caption{~\ref{algo_online_minimal}.}
-      \label{fig:sfigOptimalSpread}
-    \end{subfigure}
-
-    \begin{subfigure}{\linewidth}
-      \includegraphics[width=\linewidth]{variance_10_Polynomial.pdf}
-      \caption{~\ref{algo_online_polynomial}.}
-      \label{fig:sfigPolynomialSpread}
-    \end{subfigure}
-
-    \caption{Spreads of algorithm running times.}
-    \label{fig:variance}
+  \includegraphics[width=\linewidth]{fig/variance-10-Polynomial.pdf}
+  \caption{~\ref{algo-online-polynomial}.}
+  \label{fig:sfigPolynomialSpread}
+  \caption{Spreads of algorithm running times.}
 \end{figure}
     
 The na\"{i}ve baseline performs poorly, taking well over a thousand seconds for even small graphs of 10 nodes.
 While the batch algorithm improves on this, it still does not scale very well, with computation for a graph with 14 nodes and 0.4 density taking hours.
 Our implementation does not memoize the construction of the vector and matrix representation of paths in GF(2); profiling indicates that this construction is a major factor in the high time cost for this algorithm.
-\ref{algo_online_polynomial} performs only slightly better than the batch algorithm.
+\ref{algo-online-polynomial} performs only slightly better than the batch algorithm.
 Surprisingly, the optimal set algorithm cuts time cost by several orders of magnitude, and runs in milliseconds for small graphs.
 All implementations are sensitive to density, performing better when density is low.
     
@@ -711,7 +687,7 @@ All implementations are sensitive to density, performing better when density is 
 
 Figure~\ref{fig:timeVsSize} shows that the algorithms' time scales with size, as expected.
 \xxx[as]{The plots are weirdly tiny on my machine... any chance your plotting tool can output PDF images?}
-Both \ref{algo_online_minimal} and \ref{algo_online_polynomial} exhibit graphs that are polynomial in appearance.
+Both \ref{algo-online-minimal} and \ref{algo-online-polynomial} exhibit graphs that are polynomial in appearance.
 The na\"{i}ve baseline as well as the two flip tolerant baseline display quick growth.
 The batch algorithm also grows fast, though not as much as the online checking baselines.
 
@@ -726,10 +702,10 @@ The periodic spikes in Figure ~\ref{fig:sfigOptimalTvsS} are striking.
 We plot the spread of results in Figure~\ref{fig:sfigOptimalSpread} to understand what is happening.
 Grey points are the results of evaluation on individual points, and error bars show standard deviation. 
 The black curve traces the mean.
-We find ~\ref{algo_online_minimal} has outliers about two standard deviation above the mean responsible for the spikes in the average.
+We find ~\ref{algo-online-minimal} has outliers about two standard deviation above the mean responsible for the spikes in the average.
 The outliers themselves follow a polynomial curve, appearing almost periodically.
 We have not yet identified the cause of the behavior.
-Figure ~\ref{fig:variance} depicts the situation for ~\ref{algo_online_polynomial}, where no such effect is observed.
+Figure ~\ref{fig:variance} depicts the situation for ~\ref{algo-online-polynomial}, where no such effect is observed.
 
 \subsection{Size of Output}
 Output size is a metric of interest, should the equality checking oracle be expensive.
@@ -758,8 +734,3 @@ Integrating conversion consistency checks into widely used languages such as Sca
 Since Scala and several other languages provide automatic conversions between types, it seems important to ensure that the choice of which path to take (an apparently arbitrary choice) does not effect the behavior of the program.
 Having an algorithm to ensure the commutativity of the resulting diagrams can ensure that behavior is correct and help prevent semantic confusion or errors when using such features.
 More engineering work still remains to implement this feature in a language such as Scala, but this paper provides the algorithms necessary to explore a solution.
-
-\bibliography{refs}
-\bibliographystyle{plain}
-
-\end{document}
