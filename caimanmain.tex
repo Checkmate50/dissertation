@@ -1,10 +1,51 @@
 \section{Introduction}
+\label{sec:intro}
+
+Having a concrete example is helpful when understanding the design and behavior of the Caiman language.
+For this example, we will be building the \code{select_sum} function, which takes in three arrays `v1`, `v2`, and `v3`, and returns the sum of either `v2` or `v3` depending on the sign of `v1`.
+
+A naive \texttt{C} solution for this might look something like the following (for some fixed size of array):
+%
+\begin{lstlisting}
+
+int select_sum(int[] v1, int[] v2, int[] v3) {
+  if (sum(v1) < 0) {
+    return sum(v2);
+  } 
+  else {
+    return sum(v3);
+  }
+}
+\end{lstlisting}
+%
+This code is fairly straightforward to understand, and has the significant upside of having its behavior exactly dependent on the abstraction of using an existing (working) function.
+This approach, however, is not necessarily performant.  
+While we can often rely on an optimizing compiler to work out a reasonably fast arrangement of this code, the compiler cannot always assume the \textit{intent} of the programmer, restricting potential optimizations.
+As a result, the programmer may need to rewrite this code to change performance, but without changing the semantic meaning of this code:
+%
+\begin{lstlisting}
+
+int select_sum(int[] v1, int[] v2, int[] v3) {
+  int sum2 = sum(v2);
+  int sum3 = sum(v3);
+  if (sum(v1) < 0) {
+    return sum2;
+  } 
+  else {
+    return sum3;
+  }
+}
+\end{lstlisting}
+%
 
 \subsection{Separation of Concerns}
+\label{subsec:separation}
 
 \subsection{Program Decomposability}
+\label{subsec:decomposability}
 
 \section{Background}
+\label{subsec:background}
 
 \paragraph{WebGPU}
 
@@ -17,20 +58,64 @@
 \paragraph{Linear Types}
 
 \section{Practical Caiman}
+\label{sec:practical}
 
-\subsection{Overview}
+To explain how Caiman works, we will work through the example shown in the introduction, namely \code{select_sum}.  For this illustration, we will be using code written the user-facing Caiman frontend, as opposed to the Caiman IR described in more detail in~\ref{sec:engineering}.
+
+A Caiman program consists of a series of functions written across two languages: the \textit{specification} language and the \textit{implementation} language.  Informally, a function written in the specification language describes the semantic behavior of the program, while a function written in the implementation language describes how that program is implemented on the host machine.  This is the core mechanism by which Caiman separates semantic and performance concerns.
+
+Additionally, a Caiman specification must deal with one of three distinct properties of the operation it is specifying: the value calculations, the timeline of the events and synchronizations, and manipulations of existing memory.  We give each of these ``kinds" of specification functions a unique name, respectively they are the \textit{value}, \textit{timeline}, and \textit{spatial} specifications.  Any implementation must implement one of each kind of specification, though specifications may be used by multiple implementation functions.
+
+We will start by showing how to implement \code{select_sum} in Caiman's specification language(s), before moving onto describing the choice of implementations Caiman provides.  We will also examine some intuition of why the Caiman typechecker is able to validate an implementation against a given specification, though the formal model and proof will be deferred to section~\ref{sec:formal}.
 
 \subsection{Specification Languages}
+\label{subsec:spec}
+
+Caiman specifications are written as functions with a Rust-like header and declarative bodies.  The complete syntax can be summarized as the following:
+%
+\begin{lstlisting}
+
+// function header, any number of arguments
+spec_kind name(arg : type) -> return_type {
+  var :- expression
+  returns var
+}
+\end{lstlisting}
+%
+The specific expressions allowed for each variable declaration depend on the kind of specification.  All specifications, however, share expressions for function calls and ternary conditional expression:
+%
+\begin{lstlisting}
+
+// function call
+var :- fn_name(expr)
+// the usual notion of conditions
+var :- if cond then expr1 else expr2
+\end{lstlisting}
+%
+The most intuitive Caiman specification to start with is often the \textit{value} function.  Our implementation for \code{select_sum} is as follows:
+%
+\begin{lstlisting}
+
+val select_sum(v1: [i64], v2: [i64], v3: [i64]) -> i64 {
+  condition :- sum1 < 0
+  result :- sum(v2) if condition else sum(v3)
+  returns result
+}
+\end{lstlisting}
+%
 
 \subsubsection{Function Equivalence}
+\label{subsec:equivalence}
 
 \subsection{Implementation Language}
+\label{subsec:implementation}
 
 \subsubsection{Control Flow}
 
 \subsection{Working Example}
 
 \section{Formal Model}
+\label{sec:formal}
 
 \subsection{Formal Objective}
 
@@ -39,6 +124,7 @@
 \subsection{Timeline and Spatial Languages}
 
 \section{Explication}
+\label{sec:explication}
 
 \subsection{Object and Example}
 
@@ -47,6 +133,7 @@
 \subsection{Engineering}
 
 \section{Caiman Engineering}
+\label{sec:engineering}
 
 \subsection{WebGPU Target and Codegen}
 
@@ -57,6 +144,7 @@
 \subsubsection{Translation to Caiman Assembly}
 
 \section{Results}
+\label{sec:results}
 
 \subsection{Translating Examples}
 
@@ -65,6 +153,7 @@
 \subsection{Explication}
 
 \section{Conclusion}
+\label{sec:conclusion}
 
 \subsection{Performance Work}
 
