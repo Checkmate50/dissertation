@@ -32,7 +32,27 @@
 
 \section{Formal Model}
 
-\subsection{Formal Objective}
+\begin{figure}
+\begin{align*}
+	c &\in\text{constants}\\
+	x &\in\text{variables}\\
+	f &\in \text{function names}\\
+	p &\in\text{primitives}\\
+	t &\in\text{types} \\
+	\tau &\defas \textrm{unit} \,|\, \top_p \,|\, \bot_p \,|\, t \\
+	e &\defas v \,|\, c \,|\, f(e_1, e_2) \,|\, x\ \textrm{as!}\ \tau \,|\, x\ \textrm{in}\ \tau\\
+	C &\defas \tau \, x = e \,|\, e\\
+	P  &=  C;P \,|\, \epsilon\\
+\end{align*}
+\caption{Hatchling Syntax}
+\label{fig:syntax}
+\end{figure}
+
+In this section, we will be describing a formal model of the Caiman language. We will use this to prove our assertion that the Caiman typechecker will ensure a given (typed) implementation has the same (observational) semantics as a specification it implements.  We will also be more formally specifying these terms to precisely narrow our claim, and addressing the limitations of this presented approach.
+
+To do this, we will start by describing a subset of the Caiman IR, a language called \textit{Hatchling}.  Hatchling has operations similar to the types and control flow of the Caiman IR, with the goal of describing exactly the type guarantees made by Caiman.
+
+
 
 \subsection{Semantics}
 
