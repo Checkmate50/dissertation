@@ -171,14 +171,14 @@ This is a valid Caiman implementation of this program, meant to show that in man
 \begin{lstlisting}
 
 fn select_sum_impl(
-  v1: [i64; N] @ input(val.v1), 
-  v2: [i64; N] @ input(val.v1), 
-  v3: [i64; N] @ input(val.v1)) 
+  v1: [i64; N] @ val.v1,
+  v2: [i64; N] @ val.v1,
+  v3: [i64; N] @ val.v1)
   -> i64 @ node(val.result)
   impls select_sum,... {
     let s1 : i64 @ node(val.sum1) = sum_cpu(v1);
     let cond : bool @ node(val.condition) = s1 < 0;
-    if @ node(val.result) cond { 
+    if @ node(val.result) cond {
         let s2 : i64 @ node(val.sum2) = sum_cpu(v2);
         s2
     }
@@ -194,7 +194,7 @@ Our focus in this rewrite is to expose the (baseline) types used by a Caiman imp
 The part of the type \code{node(val.sum1)} has three pieces, \code{node}, \code{val}, and \code{sum1}, with the following meanings:
 %
 \begin{itemize}
-\item \code{node} states that the given type is a node in some specification function (as opposed to an input or an output to that function)
+\item \code{node} states that the given type is a node in some specification function (as opposed to an \code{input} or an \code{output} to that specification)
 \item \code{val} states that the given type is a part of the value specification this function is implementing, \code{select_sum} in this case
 \item \code{sum1} states that we are working with the specific node named \code{sum1}.
 \end{itemize}
@@ -206,6 +206,8 @@ let s1 : i64 @ node(val.sum2) = sum(v1);
 \end{lstlisting}
 %
 Then our code would fail to compile.  Interestingly, this line alone would be enough to fail to compile, as we defined \code{val.sum2=sum(v2)}, and since our implementation variable \code{v1} has type \code{input(val.v1)}, the types of \code{v2} and \code{v1} don't ``match up".
+
+We similarly provide a type for the result of our \code{if} statement in this implementation, which is perhaps the most surprising
 \subsection{Timeline and Spatial Specifications}
 \label{subsec:spec}
 
