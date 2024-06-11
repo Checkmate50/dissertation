@@ -4,16 +4,16 @@
 Having a concrete example is helpful when understanding the design and behavior of the Caiman language.
 For this example, we will be building the \code{select_sum} function, which takes in three arrays `v1`, `v2`, and `v3`, and returns the sum of either `v2` or `v3` depending on the sign of `v1`.
 
-A naive \texttt{C} solution for this might look something like the following (for some fixed size of array):
+A naive \texttt{Rust} solution for this might look something like the following (for some fixed size of array):
 %
 \begin{lstlisting}
 
-int select_sum(int[] v1, int[] v2, int[] v3) {
-  if (sum(v1) < 0) {
-    return sum(v2);
+select_sum(v1 : [i64; N], v2 : [i64; N], v3 : [i64; N]) -> i64 {
+  if sum(v1) < 0 {
+    sum(v2)
   } 
   else {
-    return sum(v3);
+    sum(v3)
   }
 }
 \end{lstlisting}
@@ -25,7 +25,7 @@ As a result, the programmer may need to rewrite this code to change performance,
 %
 \begin{lstlisting}
 
-int select_sum(int[] v1, int[] v2, int[] v3) {
+select_sum(v1 : [i64; N], v2 : [i64; N], v3 : [i64; N]) -> i64 {
   int sum2 = sum(v2);
   int sum3 = sum(v3);
   if (sum(v1) < 0) {
@@ -68,10 +68,10 @@ Additionally, a Caiman specification must deal with one of three distinct proper
 
 We will start by showing how to implement \code{select_sum} in Caiman's specification language(s), before moving onto describing the choice of implementations Caiman provides.  We will also examine some intuition of why the Caiman typechecker is able to validate an implementation against a given specification, though the formal model and proof will be deferred to section~\ref{sec:formal}.
 
-\subsection{Specification Languages}
-\label{subsec:spec}
+\subsection{Value Specification}
+\label{subsec:value}
 
-Caiman specifications are written as functions with a Rust-like header and declarative bodies.  The complete syntax can be summarized as the following:
+Caiman specifications are written as functions with a Rust-like header and declarative bodies.  We emphasize declarative here to mean that declaration order does not matter (as we will see, we are essentially building a dependency graph).  The complete syntax can be summarized as follows:
 %
 \begin{lstlisting}
 
@@ -87,61 +87,303 @@ The specific expressions allowed for each variable declaration depend on the kin
 \begin{lstlisting}
 
 // function call
-var :- fn_name(expr)
+fn_name(expr)
 // the usual notion of conditions
-var :- if cond then expr1 else expr2
+if cond then expr1 else expr2
 \end{lstlisting}
 %
-The most intuitive Caiman specification to start with is often the \textit{value} function.  Our implementation for \code{select_sum} is as follows:
+The most intuitive Caiman specification to start with is often the \textit{value} function, which describes what calculations are needed for each data value in the program.  We will take a deep dive into describing the value specification for \code{select_sum} before returning to definitions for Caiman's other specification languages in section~\ref{subsec:spec}.  
+
+Our value specification for \code{select_sum} is as follows:
 %
 \begin{lstlisting}
 
-val select_sum(v1: [i64], v2: [i64], v3: [i64]) -> i64 {
-  condition :- sum1 < 0
-  result :- sum(v2) if condition else sum(v3)
-  returns result
+val select_sum(v1: [i64; N], v2: [i64; N], v3: [i64; N]) -> i64 {
+    sum1 = sum(v1)
+    sum2 = sum(v2)
+    sum3 = sum(v3)
+    condition :- sum1 < 0
+    result :- if condition then sum2 else sum3
+    returns result
 }
 \end{lstlisting}
 %
+We have written this specification to be more verbose than needed for the sake of providing a more detailed examination of the semantics being used here.  Many of these lines can be condensed or combined (we can just write \code{if sum(v1) < 0 ...}, for example).
+
+Nevertheless, this declaration more-or-less mirrors our naive C code, notably replacing conditional \code{if/else} blocks with the ternary expression \code{if-then-else}.  This distinction is more than just syntactic, Caiman's specification language is designed to have no internal control flow, as hinted at by the syntax.
+
+Additionally, since Caiman's operations are unordered (we can freely move or combine each declaration here without changing the specification meaning), we do not have any requirement that these operations must be executed in the order written.
+
+More precisely, this specification gives us constraints on what values this function must produce, but leaves the details up to the actual implementation.  We can exactly enumerate these requirements as follows:
+%
+\begin{itemize}
+\item \code{v1}, \code{v2}, and \code{v3} are all arrays of type \code{i64}, and this function produces data of type \code{i64} (this is the usual type constraint placed by a function header).
+\item The specification variables \code{sum1}, \code{sum2}, and \code{sum3} depend on \code{v1}, \code{v2}, and \code{v3}, respectively.  For each of these, we must apply \code{sum} to produce our respective value.
+\item \code{condition} depends on having calculated \code{sum1} already \textit{at some point}, and also have the constant \code{0} as a value.
+\item Similarly, \code{result} depends on having calculated \code{condition}, \code{sum1}, and \code{sum2}, thus requiring the calculations of all of their dependencies to have been done.
+\item Finally, \code{returns result} informs us that this function will return the \code{result} value.
+\end{itemize}
+%
+Importantly, however, this specification provides formal requirements; as we will shortly in subsection~\ref{subsec:implementation}, Caiman implementations of this specification which do not produce the specified values will fail to typecheck and will be rejected at compile time.  Indeed, we can safely say that each specification variable becomes a type we can refer to while typechecking an implementation function.  We must first take a short diversion into examining Caiman function definitions.
 
 \subsubsection{Function Equivalence}
-\label{subsec:equivalence}
+
+We need to take a short dive into how the \code{sum} function is being used in this \code{select_sum} specification.  In Caiman, every function used in a specification must be a \textit{function equivalence class}.  Function equivalence classes consist of a name associated with one or more function definitions (which may be defined in Caiman or externally) that the programmer considers equivalent.
+
+The most immediate use for function classes can be seen with the following definition of \code{sum} that we include in the \code{select_sum} file:
+%
+\begin{lstlisting}
+
+feq sum {
+    extern(cpu) pure sum_cpu([i64; N]) -> i64
+    extern(gpu) pure sum_gpu([i64; N]) -> i64
+}
+\end{lstlisting}
+%
+Here we are simply saying that we consider the \code{cpu} and \code{gpu} definitions of \code{sum} to be equivalent.  The key reason for introducing these equivalence classes is to allow for multiple implementations of the same function to coexist in the same program, and to allow the user to fearlessly call any particular version in their implementation of some specification.  
+
+Note that \code{select_sum} must also be in such a function equivalence class -- syntactically we name this equivalence class to be the same as our defined value function, in this case just \code{select_sum}.  In this way, Caiman specification functions can call other specification functions without introducing assumptions about the implementations of those functions.  
+
+Importantly, however, Caiman does not attempt to prove this assertion or require any more annotation than exactly the type of the function provided here (the external implementations of \code{sum} could be buggy, and Caiman makes no claim about preventing this).  Similarly, we also make no attempt to verify that an external function implementing a Caiman value specification will match the semantics of that specification, and leave this work to the user.  Stylistically, this means that Caiman's guarantees and utility are strongest when a majority of the code being used in a Caiman program is written in Caiman rather than made external.  
 
 \subsection{Implementation Language}
 \label{subsec:implementation}
 
-\subsubsection{Control Flow}
+With our value specification and function equivalence classes in hand, we can now implement a Caiman program for \code{select_sum}.  As a reminder, all the code we have written so far provides typing information for our actual implementation here, and is not compiled into an executable program without this implementation.
 
-\subsection{Working Example}
+Frontend Caiman implementations more-or-less resemble Rust code, with the addition of specifying which particular specification(s) they are implementing.  As noted above, we will only focus on implementing our value specification for now.  Our first implementation of \code{select_sum} is thus as follows:
+%
+\begin{lstlisting}
+
+fn select_sum_impl(v1: [i64; N], v2: [i64; N], v3: [i64; N]) 
+  -> i64 impls select_sum,... {
+    if sum_cpu(v1) < 0 { 
+        sum_cpu(v2)
+    }
+    else {
+        sum_cpu(v3)
+    }
+}
+\end{lstlisting}
+%
+This is a valid Caiman implementation of this program, meant to show that in many cases, the programmer can essentially implement code similar to standard languages, where information can mostly be inferred.  For understanding the typechecking work Caiman does on this program, however, it is perhaps more informative to show the explicit Caiman type annotations we can provide for such a program.  When we hand-write these annotations, we produce the following (equivalent) program:
+%
+\begin{lstlisting}
+
+fn select_sum_impl(
+  v1: [i64; N] @ input(val.v1), 
+  v2: [i64; N] @ input(val.v1), 
+  v3: [i64; N] @ input(val.v1)) 
+  -> i64 @ node(val.result)
+  impls select_sum,... {
+    let s1 : i64 @ node(val.sum1) = sum_cpu(v1);
+    let cond : bool @ node(val.condition) = s1 < 0;
+    if @ node(val.result) cond { 
+        let s2 : i64 @ node(val.sum2) = sum_cpu(v2);
+        s2
+    }
+    else {
+        let s3 : i64 @ node(val.sum3) = sum_cpu(v3);
+        s3
+    }
+}
+\end{lstlisting}
+%
+Our focus in this rewrite is to expose the (baseline) types used by a Caiman implementation.  Each variable in an implementation has 2 components: an raw datatype and three specification types (we are only showing the value specification type for now for simplicity).  \code{s1}, for example, has a raw datatype of \code{i64}, and a (value) specification type of \code{node(val.sum1)}.
+
+The part of the type \code{node(val.sum1)} has three pieces, \code{node}, \code{val}, and \code{sum1}, with the following meanings:
+%
+\begin{itemize}
+\item \code{node} states that the given type is a node in some specification function (as opposed to an input or an output to that function)
+\item \code{val} states that the given type is a part of the value specification this function is implementing, \code{select_sum} in this case
+\item \code{sum1} states that we are working with the specific node named \code{sum1}.
+\end{itemize}
+%
+Crucially, this is part of the type of the implementation variable as much as the datatype \code{i64}, though the specification type can be erased when compiling Caiman code.  In other words, if we instead wrote the (incorrect) annotation:
+%
+\begin{lstlisting}
+let s1 : i64 @ node(val.sum2) = sum(v1);
+\end{lstlisting}
+%
+Then our code would fail to compile.  Interestingly, this line alone would be enough to fail to compile, as we defined \code{val.sum2=sum(v2)}, and since our implementation variable \code{v1} has type \code{input(val.v1)}, the types of \code{v2} and \code{v1} don't ``match up".
+\subsection{Timeline and Spatial Specifications}
+\label{subsec:spec}
+
+\subsection{Synchronizing with the GPU}
+\label{subsec:sync}
 
 \section{Formal Model}
 \label{sec:formal}
 
 \begin{figure}
 \begin{align*}
-	c &\in\text{constants}\\
-	x &\in\text{variables}\\
-	f &\in \text{function names}\\
-	p &\in\text{primitives}\\
-	t &\in\text{types} \\
-	\tau &\defas \textrm{unit} \,|\, \top_p \,|\, \bot_p \,|\, t \\
-	e &\defas v \,|\, c \,|\, f(e_1, e_2) \,|\, x\ \textrm{as!}\ \tau \,|\, x\ \textrm{in}\ \tau\\
-	C &\defas \tau \, x = e \,|\, e\\
-	P  &=  C;P \,|\, \epsilon\\
+	\psi &\in \textbf{S}\\
+	\phi &\in \textbf{C}\\
+	\tau &\in \textbf{T} \\
+    d &\defas d_1.d_2 \,|\,
+        \tau\,\psi\,\textrm{:-}\, \phi(\psi_1) \,|\,
+        \tau\,\psi\,\textrm{:-}\, \textrm{if}\, \psi_1 \,\textrm{then}\, \psi_2 \,\textrm{else}\, \psi_3 
+        \\
+    p &\defas d.\textrm{returns}\, \psi
 \end{align*}
-\caption{Hatchling Syntax}
-\label{fig:syntax}
+\caption{Hatchling Specification Syntax}
+\label{fig:hatchspecsyntax}
+\end{figure}
+
+\begin{figure}
+\begin{align*}
+	\psi&\in \Psi\\
+   	\tau&\in \textbf{T} \\
+	x&\in \textbf{V}\\
+	f&\in \textbf{F}\\
+	c&\defas \,c_1 ; c_2 \,|\, 
+        x\leftarrow f_\psi(x_1) \,|
+        \\&\qquad
+        x=\textrm{alloc}\,\tau \,|\,
+        x\leftarrow\textrm{copy}\, x_1 \,|\, 
+        x\leftarrow\textrm{ref}\, x_1 \,|
+        \\&\qquad
+        x\leftarrow\textrm{select}_{\psi} (x_1, x_2, x_3)\\
+    p&\defas c;\textrm{return}\, x
+\end{align*}
+\caption{Hatchling Implementation Syntax}
+\label{fig:hatchimplsyntax}
 \end{figure}
 
 In this section, we will be describing a formal model of the Caiman language. We will use this to prove our assertion that the Caiman typechecker will ensure a given (typed) implementation has the same (observational) semantics as a specification it implements.  We will also be more formally specifying these terms to precisely narrow our claim, and addressing the limitations of this presented approach.
 
 To do this, we will start by describing a subset of the Caiman IR, a language called \textit{Hatchling}.  Hatchling has operations similar to the types and control flow of the Caiman IR, with the goal of describing exactly the type guarantees made by Caiman.
 
+As with the Caiman IR, Hatchling has a specification and an implementation.    Our primary goal will be to setup a proof of the following theorem (although the detailed proof itself will be left to Appendix TODO):
+%
+\begin{theorem}
+Any well-typed Hatchling implementation program with types matching those of a well-typed Hatchling specification program must, for all inputs, either fail to terminate or produce equivalent values as that specification program.
+\end{theorem}
+%
+As an observation about this proof, the term \textit{equivalent outputs} relies on a precise notion of equivalence and values in this context.  Specifically, equivalence is defined exactly as any function that is a member of its function class (as described in subsection~\ref{subsec:equivalence}), while value refers to the series of operations that define some result.  In this sense, we observe that the operation $1+1$ is not considered to be the same value as the constant $2$, unless an equivalence is explicitly stated.
 
+The syntax for each of these Hatchling sub-languages are defined in figures~\ref{fig:hatchspecsyntax} and~\ref{fig:hatchimplsyntax}, respectively.  These syntax rely on external sets of distinct symbols, namely $\mathbf{T}$, $\textbf{S}$, $\textbf{P}$, $\mathbf{V}$, and $\mathbf{F}$.  These sets have no explicit meaning, but intuitively represent the sets of types, specification variables, function classes, implementation variables, and function names, respectively.  Function calls in Hatchling only allow a single argument -- the extension of these proofs to multiple arguments is straightforward but mechanically irksome.  We assume that the set of types $\mathbf{T}$ includes the type $\textrm{unit}$, which we use in the typechecking semantics.  We also assume the set of specification variable symbols $\mathbf{S}$ and the set of function classes $\mathbf{C}$ includes $\mathbf{0}$, a special character that cannot be assigned to and indicates a lack of dependence.
 
-\subsection{Semantics}
+A Hatchling specification program additionally requires 2 contexts, 1 dynamic and 1 static:
+\begin{itemize}
+\item 
+$\Psi:\mathbf{S}\mapsto
+\mathbf{T}\bigtimes
+\left(\mathbf{C}\bigtimes
+\left(\mathbf{S}\bigtimes\mathbf{S}\bigtimes\mathbf{S}\right)
+\right)$
+, which is dynamic and maps from a specification variable to both its type and its dependencies.  A variable depends either on a function or no function (semantically represented with $\top$), and has exactly 0, 1, or 3 dependencies (0 for an input, 1 for a function call, or 3 for a condition).
+\item $\Phi:\mathbf{C}\mapsto\mathbf{T}\bigtimes\mathbf{T}$, which is static and maps from function classes to the input type and the output type of that function.
+\end{itemize}
 
-\subsection{Timeline and Spatial Languages}
+A Hatchling implementation program, on the other hand, similarly requires only 1 dynamic context, but requires 3 constant global contexts (where $\Delta$ and $\Psi$ are built to be derived from the specification associated with the current implementation).  These contexts are as follows:
+\begin{itemize}
+\item $\Gamma:\mathbf{V}\mapsto\mathbf{T}\bigtimes\left(\mathbf{S}\cup\top\right)$, the sole dynamic context, which maps from an implementation pointer to the type of the data being referred to by that pointer.  This context also includes the associated value if one has been written to the location pointed at by this variable.
+\item $\Psi:\mathbf{S}\mapsto
+\mathbf{T}\bigtimes
+\left(\mathbf{C}\bigtimes
+\left(\mathbf{S}\bigtimes\mathbf{S}\bigtimes\mathbf{S}\right)
+\right)$
+, which must be derived from the result of applying the typechecking rules to a well-typed Hatchling specification.  When typechecking an implementation, however, $\Psi$ is global and constant.
+\item $\Phi:\mathbf{C}\mapsto\mathbf{T}\bigtimes\mathbf{T}$, which is the same as with the specification program
+\item $\Xi:\mathbf{F}\mapsto\mathbf{C}$, which maps from functions to their owning function class
+\end{itemize}
+
+Finally, both Hatchling programs must specify an output type.  For the Hatchling specification program, we denote this as $\tau_\textrm{out}$, while for the Hatchling implementation program, we denote this as $\psi_\textrm{out}$.  Note that we assume that a function being a member of $\Phi$ implies that it is a well--typed function.
+
+\subsection{Typing Semantics}
+
+\begin{figure}
+	\begin{mathpar}
+   		\inferrule
+   		{\Psi,\Psi' |- d_1 \qquad \Psi',\Psi'' |- d_2}
+   		{\Psi,\Psi'' |- d_1.d_2}
+           
+   		\inferrule
+   		{\Psi,\Psi' |- d_2 \qquad \Psi',\Psi'' |- d_1}
+   		{\Psi,\Psi'' |- d_1.d_2}
+
+		\inferrule
+		{\psi\notin\Psi 
+        \qquad \Psi(\psi_1)=(\tau_1,\_)
+        \qquad \Phi(\phi)=(\tau_1,\tau_2)}
+		{\Psi,
+        \Psi\sqcup[\psi\mapsto\left(\tau_2,\left(\phi,\left(\psi_1,\mathbf{0},\mathbf{0}\right)\right)\right)]
+         |- 
+        \tau\,\psi\,\textrm{:-}\, \phi(\psi_1)}
+
+		\inferrule
+		{\psi\notin\Psi 
+        \qquad \psi_1\in\Psi 
+        \qquad \Psi(\psi_2)=(\tau,\_)
+        \qquad \Psi(\psi_3)=(\tau,\_)}
+		{\Psi,\Psi\sqcup
+        [\psi\mapsto\left(\tau,
+        \left(\top,
+        \left(\psi_1,\psi_2,\psi_3\right)
+        \right)
+        \right)]
+         |- 
+        \textrm{if}\, \psi_1 
+        \,\textrm{then}\, \psi_2 
+        \,\textrm{else}\, \psi_3}
+        
+   		\inferrule
+   		{\Psi,\Psi' |- d \qquad \Psi'(\psi)=(\tau_\textrm{out},\_)}
+   		{\Psi,\Psi' |- d.\textrm{return}\,\psi}
+	\end{mathpar}
+	\caption{Hatchling Specification Typing Judgment}
+	\label{fig:spectyping}
+\end{figure}
+
+\begin{figure}
+	\begin{mathpar}
+      	\inferrule
+   		{\Gamma(x)=(\tau,\psi)}
+        {\Gamma,\Gamma[x/(\tau,\top)]}
+        
+		\inferrule
+		{\Gamma,\Gamma' |- c_1 \qquad \Gamma',\Gamma'' |- c_2}
+        {\Gamma,\Gamma'' |- c_1;c_2}
+        
+        \inferrule
+		{
+            \Psi(\psi)=(\_,(\phi,(\psi_1,\mathbf{0},\mathbf{0}))) \qquad
+            \Xi(f)=\phi \qquad
+            \Gamma(x_1)=(\tau,\psi_1) \qquad
+        }
+        {\Gamma,\Gamma[x/(\tau,\psi)] |- x\leftarrow f_\psi(x_1)}
+        
+        \inferrule
+		{\qquad}
+        {\Gamma,\Gamma[x/(\tau,\top)] |- x=\textrm{alloc}\,\tau}
+        
+        \inferrule
+		{\Gamma(x_1)=(\tau,\psi) \qquad \Gamma(x)=(\tau,\_)}
+        {\Gamma,\Gamma[x/(\tau,\psi)] |- x=\textrm{copy}\,x_1}
+        
+        \inferrule
+		{\Gamma(x_1)=(\tau,\psi) \qquad \Gamma(x)=(\tau,\_)}
+        {\Gamma,\Gamma[x/(\tau,\psi)] |- x=\textrm{ref}\,x_1}
+        
+        \inferrule
+        {
+            \Gamma(x_i)=(\_,\psi_i) \qquad
+            \Psi(\psi)=(\_,(\top,(\psi_1,\psi_2,\psi_3))) \qquad
+        }
+        {\Gamma,\Gamma[x/(\tau,\psi)] |- x\leftarrow\textrm{select}_{\psi} (x_1, x_2, x_3)}
+        
+   		\inferrule
+   		{\Gamma,\Gamma' |- c, \Gamma'(x)=\psi_\textrm{out}}
+        {\Gamma,\Gamma' |- c;\textrm{return}\, x}
+	\end{mathpar}
+	\caption{Hatchling Implementation Typing Judgment}
+	\label{fig:impltyping}
+\end{figure}
+
+TODO: the reference semantics need a linear extension, but I don't wanna figure out the best way to condense that right now.
+
+\subsection{Operational Semantics}
 
 \section{Explication}
 \label{sec:explication}
