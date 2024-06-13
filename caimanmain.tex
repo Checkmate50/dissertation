@@ -1,8 +1,12 @@
 \section{Introduction}
 \label{sec:intro}
 
-Having a concrete example is helpful when understanding the design and behavior of the Caiman language.
-For this example, we will be building the \code{select_sum} function, which takes in three arrays `v1`, `v2`, and `v3`, and returns the sum of either `v2` or `v3` depending on the sign of `v1`.
+GPUs are hard to program I guess.
+
+\subsection{Separation of Concerns}
+\label{subsec:separation}
+
+Our running example throughout this paper will be used to illustrate the performance trade--offs inherent in conditional logic and device synchronization.  Specifically, we will be building the \code{select_sum} function, which takes in three arrays `v1`, `v2`, and `v3`, and returns the sum of either `v2` or `v3` depending on the sign of `v1`.
 
 A naive \texttt{Rust} solution for this might look something like the following (for some fixed size of array):
 %
@@ -19,7 +23,8 @@ select_sum(v1 : [i64; N], v2 : [i64; N], v3 : [i64; N]) -> i64 {
 \end{lstlisting}
 %
 This code is fairly straightforward to understand, and has the significant upside of having its behavior exactly dependent on the abstraction of using an existing (working) function.
-This approach, however, is not necessarily performant.  
+This approach, however, is not necessarily performant.
+
 While we can often rely on an optimizing compiler to work out a reasonably fast arrangement of this code, the compiler cannot always assume the \textit{intent} of the programmer, restricting potential optimizations.
 As a result, the programmer may need to rewrite this code to change performance, but without changing the semantic meaning of this code:
 %
@@ -37,25 +42,39 @@ select_sum(v1 : [i64; N], v2 : [i64; N], v3 : [i64; N]) -> i64 {
 }
 \end{lstlisting}
 %
+In this fairly simple case, we likely expect the compiler to optimize these programs to be about the same.  We may quickly become less confident when dealing with more complicated logic, however, often resulting in a need to fight the compiler to perform exactly the operations the programmer intends.  This is especially true when we introduce another device into the equation, and the substantial increase in decisions an implementation makes about when to send information between devices and when to start asynchronous operations.
 
-\subsection{Separation of Concerns}
-\label{subsec:separation}
+To examine this specific issue in our example, suppose \code{v2} and \code{v3} are large arrays.  Rather than fiddling with the order of operations in \code{select_sum}, we might hope to improve performance by moving the \code{sum} operations on these large arrays to the GPU, with code we hope looks like the following:
+%
+\begin{lstlisting}
+select_sum(v1 : [i64; N], v2 : [i64; N], v3 : [i64; N]) -> i64 {
+  if (sum(v1) < 0) {
+    sum_gpu(v2)
+  }
+  else {
+    sum_gpu(v3)
+  }
+}
+\end{lstlisting}
+%
 
-\subsection{Program Decomposability}
-\label{subsec:decomposability}
+\subsection{Combinatoric Explosion}
+\label{subsec:combinatoric}
 
 \section{Background}
-\label{subsec:background}
+\label{sec:background}
 
-\paragraph{WebGPU}
+\subsection{Submitting to the GPU}
+\label{subsec:submission}
+
+\subsection{Promises}
+\label{subsec:promise}
 
 \paragraph{CUDA, SYCL}
 
 \paragraph{Halide, Scheduling}
 
-\paragraph{Continuation Passing Style}
-
-\paragraph{Linear Types}
+\label{subsec:linear}
 
 \section{Practical Caiman}
 \label{sec:practical}
@@ -99,9 +118,9 @@ Our value specification for \code{select_sum} is as follows:
 \begin{lstlisting}
 
 val select_sum(v1: [i64; N], v2: [i64; N], v3: [i64; N]) -> i64 {
-    sum1 = sum(v1)
-    sum2 = sum(v2)
-    sum3 = sum(v3)
+    sum1 :- sum(v1)
+    sum2 :- sum(v2)
+    sum3 :- sum(v3)
     condition :- sum1 < 0
     result :- if condition then sum2 else sum3
     returns result
@@ -127,6 +146,7 @@ More precisely, this specification gives us constraints on what values this func
 Importantly, however, this specification provides formal requirements; as we will shortly in subsection~\ref{subsec:implementation}, Caiman implementations of this specification which do not produce the specified values will fail to typecheck and will be rejected at compile time.  Indeed, we can safely say that each specification variable becomes a type we can refer to while typechecking an implementation function.  We must first take a short diversion into examining Caiman function definitions.
 
 \subsubsection{Function Equivalence}
+\label{subsec:equivalence}
 
 We need to take a short dive into how the \code{sum} function is being used in this \code{select_sum} specification.  In Caiman, every function used in a specification must be a \textit{function equivalence class}.  Function equivalence classes consist of a name associated with one or more function definitions (which may be defined in Caiman or externally) that the programmer considers equivalent.
 
@@ -172,20 +192,21 @@ This is a valid Caiman implementation of this program, meant to show that in man
 
 fn select_sum_impl(
   v1: [i64; N] @ val.v1,
-  v2: [i64; N] @ val.v1,
-  v3: [i64; N] @ val.v1)
+  v2: [i64; N] @ val.v2,
+  v3: [i64; N] @ val.v3)
   -> i64 @ node(val.result)
   impls select_sum,... {
     let s1 : i64 @ node(val.sum1) = sum_cpu(v1);
     let cond : bool @ node(val.condition) = s1 < 0;
-    if @ node(val.result) cond {
+    let res : @ node(val.result) = if cond {
         let s2 : i64 @ node(val.sum2) = sum_cpu(v2);
         s2
     }
     else {
         let s3 : i64 @ node(val.sum3) = sum_cpu(v3);
         s3
-    }
+    };
+    res
 }
 \end{lstlisting}
 %
@@ -202,17 +223,260 @@ The part of the type \code{node(val.sum1)} has three pieces, \code{node}, \code{
 Crucially, this is part of the type of the implementation variable as much as the datatype \code{i64}, though the specification type can be erased when compiling Caiman code.  In other words, if we instead wrote the (incorrect) annotation:
 %
 \begin{lstlisting}
+
 let s1 : i64 @ node(val.sum2) = sum(v1);
 \end{lstlisting}
 %
 Then our code would fail to compile.  Interestingly, this line alone would be enough to fail to compile, as we defined \code{val.sum2=sum(v2)}, and since our implementation variable \code{v1} has type \code{input(val.v1)}, the types of \code{v2} and \code{v1} don't ``match up".
 
-We similarly provide a type for the result of our \code{if} statement in this implementation, which is perhaps the most surprising
+An important observation is the type of \code{res}, which is derived from the \code{if-else} condition logic being applied.  In essence, we consider control flow in Caiman's implementation language to have a return type, which can only be a \code{unit} if the associated specification type is a \code{unit}.  We can show that this particular conditional logic works out, because the true case returns a result associated with the value type \code{v2}, while the false case returns a result associated with the value type \code{v3}.  If we swapped the logic to instead produce \code{v3} in the true case and \code{v2} in the false case, we would have a type error.
+
+With our types in hand, we can now rewrite our original code to reorder the sum operations to before the conditional logic, as we originally desired.  The (type-inferred) code in Caiman can be simply written as follows:
+%
+\begin{lstlisting}
+
+fn select_sum_impl_2(v1, v2, v3) 
+  -> i64 impls select_sum,... {
+    let s2 = sum_cpu(v2);
+    let s3 = sum_cpu(v2);
+    if sum_cpu(v1) < 0 {
+        s2
+    }
+    else {
+        s3
+    }
+}
+\end{lstlisting}
+%
+A visibly typed version of this code can be found in the appendix.  This implementation still typechecks and so maintains the value semantics of the \code{select_sum} specification -- a proof of this claim will be given in~\ref{sec:formal}.  Importantly, by providing this function definition, we now have two implementations in the \code{select_sum} function equivalence class -- these can be called elsewhere in Caiman by name with \code{select_sum_impl} or \code{select_sum_impl_2}.
+
+We can now address the notion of actually using function equivalence in our implementation.  Unfortunately, we are not able to yet write our call to \code{sum_gpu} (as alluded to in~\ref{subsec:equivalence}), since we will first need to specify more details about synchronizing to another device (the GPU), and we have so far assumed that the CPU is our local host and so does not need synchronization.
+
+To avoid introducing unnecessary complications to our straightforward equivalence relation, we will instead introduce another implementation of sum on the CPU, extending our equivalence class of \code{sum}:
+%
+\begin{lstlisting}
+
+feq sum {
+    extern(cpu) pure sum_cpu_1([i64; N]) -> i64
+    extern(cpu) pure sum_cpu_2([i64; N]) -> i64
+    extern(gpu) pure sum_gpu([i64; N]) -> i64
+}
+\end{lstlisting}
+%
+This example is clearly synthetic and meant to be illustrative, but even in this case we could imagine a second definition of \code{sum_cpu}: specialized to be multi-threaded while our first definition is single-threaded.
+
+We can freely use either definition within our \code{select_sum} function; for example, we could now write the following code, and the types of each value are identical to what we had before:
+%
+\begin{lstlisting}
+
+fn select_sum_impl_3(v1: [i64; N], v2: [i64; N], v3: [i64; N]) 
+  -> i64 impls select_sum,... {
+    if sum_cpu_2(v1) < 0 { 
+        sum_cpu_1(v2)
+    }
+    else {
+        sum_cpu_2(v3)
+    }
+}
+\end{lstlisting}
+%
+This mechanism to freely interchange function definitions is core to Caiman's goal of separating performance decisions and specification, as discussed in Section~\ref{sec:intro}.  Note that here we have introduced yet another definition to the \code{select_sum} function equivalence class to explore swapping out specific definitions.  In this way, we can now avoid the usual combinatorial explosion of logic being checked by relying on the value specification to maintain static consistency.
+
+It is important now to address the limitations of Caiman's function equivalence classes, since they are designed to be very simple (and we hope transparent).  Equivalence classes only apply to exactly function calls, and must either be filled by external functions (which are not checked by Caiman), or by implementations in Caiman.
+
+This means that basic properties like arithmetic or logical equivalence are not reasoned about by Caiman unless explicitly declared.  Concretely, for example, we consider \code{1+1} to be a distinct value from the constant \code{2}.  We will examine potential extensions to Caiman's minimal equivalence system when we discuss future work in Section~\ref{subsec:future}.
+
 \subsection{Timeline and Spatial Specifications}
 \label{subsec:spec}
 
-\subsection{Synchronizing with the GPU}
-\label{subsec:sync}
+We have thus far focused on a vertical slice through Caiman with the value specification language.  We can now take the intuition and ideas from this explanation to work through Caiman's other two specification languages.  
+
+It is worth noting up--front that Caiman's particular choice of specification languages is not rooted in any sort of experimentation, but instead an intuition of what is needed for the examples we care about -- you could extend the ideas presented here to write an entirely different set of specification languages.  Detailing this more abstract notion of what a specification language is, however, is out of scope of this write--up, and will be left to another, more theoretical paper.
+
+We capture the intent of the value specification language in Caiman as reasoning about the data produced and used by our computation.  When we are working with another device (such as a GPU), however, it is also important to be precise about what threading and memory resources we interact with.  More specifically, we would like to be able to break apart synchronization and memory resources across control flow, in much the same way as the value language allows us to (safely) reuse data and decompose computation on that data into carefully designed pieces.
+
+To achieve this goal, we also introduce the \emph{timeline} and \emph{spatial} specification languages to Caiman.  These languages follow the syntax and declarative approach used by the value specification, but with operations intended to capture the intent of synchronization and memory primitives used when scheduling GPU operations.
+
+A Caiman synchronization mirrors that of the GLSL and WGPU submission processes, described in Section~\ref{subsec:submission}.  This process consists of exactly 3 events, described as a host managing the devices A and B, where device A is providing the data to run and device B is providing the computation and result:
+%
+\begin{enumerate}
+\item The host requests an \emph{encoding} location from device B, which is then given to device A.
+\item After device A has finished encoding data, the host \emph{submit}s that device B can begin computation.
+\item Once device B has finished the computation, the host allows device A to \emph{synchronize} and access the written data.
+\end{enumerate}
+%
+Caiman employs classic promise semantics for this model, described in~\ref{subsec:promise}.  For the timeline specification, then, we introduce an \code{Event} type, which informally describes a point in time.  Note that we implicitly also introduce subtypes for each step of this process to keep track of the logical flow, where each requirement is maintained structurally as being in dependency order. We also introduce the following three operations to match the stages described:
+%
+\begin{lstlisting}
+
+// Given an Event, starts an encoding on device B,
+//   also produces a 'local' event associated with device A
+//   along with a 'remote' event associated with device B
+local, remote :- encode_event(e)
+// Given a 'remote' event, begins a submission on device B
+//   produces a 'submission' event
+sub :- submission_event(remote)
+// Given a 'submission' and 'local event, 
+//  produces a 'synchronization' event on device A
+snc :- synchronization_event(local, sub)
+\end{lstlisting}
+%
+We will explore a more detailed example of using the timeline language shortly in Section~\ref{subsec:fullexample}.  First, however, we will summarize the (relatively simple) spatial specification language.
+
+The spatial language is used primarily to specify memory behaviors to help with guarantees related to implemented loops or recursion.  To this end, the spatial language provides a \code{BufferSpace} type, which defines a cluster of memory, along with exactly one operation, used to divide up this buffer space:
+%
+\begin{lstlisting}
+
+// splits up a given buffer space into n>=1 evenly sized pieces:
+separate_buffer_space(buff, n);
+// for example, we can split a buffer in half:
+buff1, buff2 :- separate_buffer_space(buff, 2);
+\end{lstlisting}
+%
+We will not being working through any examples that define a non-trivial spatial specification, but a recursive example can be found in Appendix \xxx{TODO}.
+
+Having defined our specification functions, we can now fully state that an implementation in Caiman must be associated with exactly one of each kind of specification.  A given implementation need not implement the entire specification of each, so long as the input and output types of that implementation are correct as stated.  Note that this means that a call into a particular Caiman implementation of a function equivalence class may result in a series of calls (some of which may be also used by other Caiman implementations of that specification).
+
+Further, each specification could be implemented by any number of Caiman implementation functions.  Additionally, each specification function has its own equivalence class, which refers to any implementation of that specification (it is rare to use a function equivalence class other than a value specification or for external functions).
+
+Note that a specification can always be trivial (simply taking in a single input and returning it), and so we can syntactically elide a specification in both an implementation header and a variable type.  In these cases, we assume that the type of the implementation variable associated with the missing specification function refers to the trivial specification.
+\subsection{Select Sum on the GPU}
+\label{subsec:fullexample}
+
+With our timeline and spatial specification functions more carefully defined, we can now construct an implementation of \code{select_sum} that calls into the GPU to calculate either \code{sum(v2)} or \code{sum(v3)} (there are many other variations we can write, but we will start with this approach).  In Rust-like psuedocode, what we are looking to implement resembles the following logic:
+%
+\begin{lstlisting}
+if sum_cpu(v1) < 0 {
+    sum_gpu(v2)
+} else {
+    sum_gpu(v2)
+}
+\end{lstlisting}
+%
+First, we reiterate our value specification for ease of readability:
+%
+\begin{lstlisting}
+val select_sum(v1: [i64; N], v2: [i64; N], v3: [i64; N]) -> i64 {
+    sum1 :- sum(v1)
+    sum2 :- sum(v2)
+    sum3 :- sum(v3)
+    condition :- sum1 < 0
+    result :- if condition then sum2 else sum3
+    returns result
+}
+\end{lstlisting}
+%
+Second, we provide a timeline specification for a \emph{single} synchronization (since we only call the gpu once in each branch, we need only to synchronize once).  As a result, our specification will simply lay out our four stages in sequence:
+%
+\begin{lstlisting}
+tmln single_sync(e : Event) -> Event {
+    local, remote :- encoding_event(e)
+    sub :- submission_event(remote)
+    sync :- synchronization_event(local)
+    returns sync
+}
+\end{lstlisting}
+%
+Third, we provide a (trivial) spatial specification:
+%
+\begin{lstlisting}
+sptl trivial_spatial(b : BufferSpace) -> BufferSpace {
+    returns b;
+}
+\end{lstlisting}
+%
+Now we can provide an exact implementation for this entire function.  We will write this implementation without explicit value types, though an explicitly typed version can be found in Appendix \xxx{TODO}:
+%
+\begin{lstlisting}
+
+fn select_sum_impl_gpu(v1: [i64; N], v2: [i64; N], v3: [i64; N]) 
+  -> i64 impls select_sum,single_sync,trivial_spatial {
+    if sum_cpu(v1) < 0 {
+        let enc = encode-begin @ node(tmln.(local, remote)) { v2 } gpu;
+        // copy the data from v2 into a gpu variable `v2_gpu`
+        encode enc.copy[v2_gpu <- v2];
+        // schedule the gpu to write the result 
+        //   of sum_gpu(v2) to a variable named s2_gpu
+        encode enc.call[s2_gpu <- sum_gpu(v2) @ val.sum2];
+        
+        // submit the calculation to the gpu
+        let fence = submit @ tmln.sub enc
+        
+        // await the result
+        let gpu_data = await @ tmln.sync
+        
+        // return s2_gpu from the bundled result
+        gpu_data.s2_gpu
+    }
+    else {
+        // we apply similar logic here
+        let enc = encode-begin @ node(tmln.(local, remote)) { v3 } gpu;
+        encode enc.copy[v3_gpu <- v3];
+        
+        encode enc.call[s3_gpu <- sum_gpu(v3) @ val.sum3];
+        let fence = submit @ tmln.sub enc
+        let gpu_data = await @ tmln.sync
+        
+        gpu_data.s3_gpu
+        sum_cpu(v3)
+    }
+}
+\end{lstlisting}
+%
+This implementation more-or-less mirrors the first approach we examined, namely calculating the sum of \code{v2} and \code{v3} inside of the condition.  Now that we have the logic for using the GPU, this approach of first calculating both before the condition will (hopefully) be more immediately appealing.
+
+Interestingly, in this case, we can apply both operations sequentially on the GPU with only a single synchronization, but this requires an unsatisfying black--box solution where we write a \code{sum_2_arrays} type function.  Alternatively, we could write a new timeline specification which allows for two synchronizations, and if our goal were to interleave our encodings and synchronizations, then we would write a new specification.
+
+However, if we are comfortable synchronizing twice, Caiman does provide a clean solution in the form of breaking up our implementation to use the timeline specification twice, without needing to modify any of our specifications:
+%
+\begin{lstlisting}
+
+fn select_sum_impl_gpu_2(
+  v1: [i64; N] @ val.v1,
+  v2: [i64; N] @ val.v2,
+  v3: [i64; N] @ val.v3) 
+  -> i64 @ val.result
+  impls select_sum,single_sync,trivial_spatial {
+    let enc = encode-begin @ node(tmln.(local, remote)) { v2 } gpu;
+    encode enc.copy[v2_gpu <- v2];
+    encode enc.call[s2_gpu <- sum_gpu(v2) @ val.sum2];
+    let fence = submit @ tmln.sub enc
+    let gpu_data = await @ tmln.sync
+    let s2 = gpu_data.s2_gpu;
+    
+    select_sum_impl_gpu_2_inter()
+}
+fn select_sum_impl_gpu_2_inter(
+  v1: [i64; N] @ val.v1, 
+  s2: i64 @ val.sum2, 
+  v3: [i64; N] @ val.v3)
+  -> i64 @ val.result
+  impls select_sum,single_sync,trivial_spatial {
+    // similar logic to compute s3
+    select_sum_impl_gpu_2_ret(v1, s2, s3)
+}
+fn select_sum_impl_gpu_2_ret(
+  v1: [i64; N], 
+  s2: i64 @ val.sum2, 
+  s3: i64 @ val.sum2) 
+  -> i64 @ val.result
+  impls select_sum,trivial_timeline,trivial_spatial {
+    if sum_cpu(v1) < 0 {
+        s2
+    }
+    else {
+        s3
+    }
+}
+\end{lstlisting}
+%
+This idea of breaking up a function to implement only part of a specification is crucial to using Caiman, as code written in this way can represent unfinished and can avoid duplicating computation.  The reason this code is able to typecheck is precisely because of our explicit annotations on the arguments and return type of each function -- otherwise, the program analysis needed often becomes intractable.  Since Caiman can prove that the type boundaries of each function resolve, we need not worry about the potential complexity introduced between function calls.
+
+Another important observation is that we can use a similar idea to break apart encoding and synchroniziation, allowing a programmer to first encode an operation, then continue doing work on the device, and finally synchronize.  Note that Caiman's restrictions are such that we could not encode an operation and then never synchronize that operation (at least, within a Caiman program where we manipulate the timeline between pieces of control flow), since the types associated with the timeline and spatial specifications must match between each possible branch we could take.
+
+Finally, it is worth acknowledging that this Caiman implementation has become quite complicated even for this simple operation.  These implementations are, by design, rather detailed about each operation that is needed to synchronize information with the GPU (or just any other device).  The intention behind this approach is to allow the user of Caiman to be as precise as possible with defining program implementation.  That being said, having implementations be this dense seemingly defeats the purpose of the guarantees Caiman can make -- if we require the programmer to both write careful specifications and implement those specifications to exacting detail, the effort to maintain this system can quickly get out of hand.
+
+We will address this concern with a core piece of the Caiman design when we discuss in Section~\ref{sec:explication}.  First, however, we need to take a brief detour into examining a formal model for Caiman's type system, to provide formal backing and proof behind the core guarantee of Caiman's implementations actually being checked against the specification.
 
 \section{Formal Model}
 \label{sec:formal}
@@ -251,6 +515,8 @@ We similarly provide a type for the result of our \code{if} statement in this im
 \caption{Hatchling Implementation Syntax}
 \label{fig:hatchimplsyntax}
 \end{figure}
+
+\xxx[dg]{I include alloc, copy, and ref here because it feels like I need to be clear about the imperative nature of Caiman's implementation, but I actually think these end up being pretty non--interesting.  I feel like the rest of the formalism is enough in retrospect.}
 
 In this section, we will be describing a formal model of the Caiman language. We will use this to prove our assertion that the Caiman typechecker will ensure a given (typed) implementation has the same (observational) semantics as a specification it implements.  We will also be more formally specifying these terms to precisely narrow our claim, and addressing the limitations of this presented approach.
 
@@ -383,18 +649,22 @@ Finally, both Hatchling programs must specify an output type.  For the Hatchling
 	\label{fig:impltyping}
 \end{figure}
 
-TODO: the reference semantics need a linear extension, but I don't wanna figure out the best way to condense that right now.
+\xxx[dg]{TODO: If I cut the alloc and ref, then this is essentially just done I think}
 
 \subsection{Operational Semantics}
+
+\xxx[dg]{I don't think I actually need operational semantics, since they sort of ``fall out" from the simplified model I decided to go with}
 
 \section{Explication}
 \label{sec:explication}
 
-\subsection{Object and Example}
+\subsection{Using Explication}
+
+\subsection{Caiman IR}
 
 \subsection{Core Algorithm}
 
-\subsection{Engineering}
+\subsection{Controlling the Explicator}
 
 \section{Caiman Engineering}
 \label{sec:engineering}
@@ -403,14 +673,8 @@ TODO: the reference semantics need a linear extension, but I don't wanna figure 
 
 \subsection{Stages of Compilation}
 
-\subsection{High Level Caiman}
-
-\subsubsection{Translation to Caiman Assembly}
-
 \section{Results}
 \label{sec:results}
-
-\subsection{Translating Examples}
 
 \subsection{Timing}
 
@@ -419,6 +683,5 @@ TODO: the reference semantics need a linear extension, but I don't wanna figure 
 \section{Conclusion}
 \label{sec:conclusion}
 
-\subsection{Performance Work}
-
 \subsection{Future Work}
+\label{subsec:future}
