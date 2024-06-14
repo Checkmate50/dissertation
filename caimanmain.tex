@@ -658,13 +658,80 @@ Finally, both Hatchling programs must specify an output type.  For the Hatchling
 \section{Explication}
 \label{sec:explication}
 
+As observed at the end of Section~\ref{sec:practical}, hand--writing Caiman implementations are painful and can practically lead to significant barriers to experimentation.  Specifically, the code itself is dense and can be hard to navigate, but we have found it to be anecdotally difficult to write even with compiler support.  Indeed, it feels as though the work done when implementing a Caiman program is both essentially the same work as writing a Caiman specification and can obscure the performance characteristics being explored.
+
+The entire design of Caiman, however, is such that this task of writing an implementation from a specification can be automated with annotation.  More specifically, we can apply a form of type--directed program synthesis, as seen here: \xxx[dg]{TODO: get a few citations, this is a common enough thing}.
+
+We use explication to describe the task of synthesizing a Caiman implementation from a Caiman specification in the presence of programmer--written implementation requirements.  To make this statement more concrete, we will start by working from example of how this looks in the Caiman frontend.
+
+The author notes that at the time of this writing, the programs shown in this section cannot be written as--is in the Caiman frontend, due entirely to minor missing engineering work on AST transformations.  Approximately equivalent programs can be written explicitly in the Caiman IR (described in ~\ref{subsec:ir}, and the programs are included in Appendix~\xxx{TODO}), but I believe it is important to note this limitation in our actual implementation.  Consequently, more annotations may need to be included in the finished Caiman frontend (to help guide the explicator) than are shown here.
+
 \subsection{Using Explication}
 
+We will start by reiterating our usual value specification for \code{select_sum}:
+%
+\begin{lstlisting}
+
+val select_sum(v1: [i64; N], v2: [i64; N], v3: [i64; N]) 
+  -> [out : i64] {
+    sum1 :- sum(v1)
+    sum2 :- sum(v2)
+    sum3 :- sum(v3)
+    condition :- sum1 < 0
+    result :- if condition then sum2 else sum3
+    returns result
+}
+\end{lstlisting}
+%
+Along with a trivial timeline and spatial specification, this is enough to write a fully explicated implementation of \code{select_sum}:
+%
+\begin{lstlisting}
+
+fn select_sum_expl(
+  v1: [i64; N] @ val.v1,
+  v2: [i64; N] @ val.v2,
+  v3: [i64; N] @ val.v3
+) -> i64 : val.out 
+  impls select_sum,trivial_time,trivial_space{
+  ???
+}
+\end{lstlisting}
+%
+With explication, we still need to provide a header (arguments and return types) and the specifications to implement.  When we write \code{???}, however, we are semantically saying that any type-safe code can be inserted to replace this \emph{multi--line hole} in the program.
+
+The Caiman \emph{explicator} can use then types we have given this function to deduce some program that matches these types.  The explicator will not, however, be able to use any other specifications than those given, meaning that it is often the case that no such program exists.  For instance, if we had excluded \code{v1} from our arguments, the \code{select_sum} specification provides no way to construct \code{v1}, and so the explicator would fail to produce a solution.
+
+Importantly, however, the explicator makes almost no guarantee about which program it will produce.  The only requirement we state is that, for a given explication implementation and for a given specification and (partial) implementation, the explicator will produce the same Caiman program -- in other words, the explicator must be deterministic.  
+
+With our current implementation of Caiman, for example, the explicator makes no attempt to optimize the program being produced, and only the first valid program it happens to find is emitted.  The explication results are written to be somewhat transparent to help with identifying issues (we will show some examples of explicated programs in Appendix \xxx{TODO}), but it is theoretically preferable to avoid specific guarantees.
+
+As a result, a key design insight for using Caiman explication is the ability to explicate a partially--implemented program.  As a concrete example, let us restrict the explicator for \code{select_sum} to ensure that the sum of \code{v2} and \code{v3} are being calculated inside of the condition rather than before:
+%
+\begin{lstlisting}
+fn select_sum_expl_2(
+  v1: [i64; N] @ val.v1,
+  v2: [i64; N] @ val.v2,
+  v3: [i64; N] @ val.v3
+) -> i64 : val.out 
+  impls select_sum,trivial_time,trivial_space{
+  if ? {
+    ???
+  }
+  else {
+    ???
+  }
+}
+\end{lstlisting}
+%
+
+
 \subsection{Caiman IR}
+\label{subsec:ir}
 
 \subsection{Core Algorithm}
 
 \subsection{Controlling the Explicator}
+\label{subsec:control}.
 
 \section{Caiman Engineering}
 \label{sec:engineering}
