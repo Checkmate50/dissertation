@@ -117,7 +117,7 @@ Our value specification for \code{select_sum} is as follows:
 %
 \begin{lstlisting}
 
-val select_sum(v1: [i64; N], v2: [i64; N], v3: [i64; N]) -> i64 {
+val select_sum(v1: [i64; N], v2: [i64; N], v3: [i64; N]) -> out: i64 {
     sum1 :- sum(v1)
     sum2 :- sum(v2)
     sum3 :- sum(v3)
@@ -194,30 +194,29 @@ fn select_sum_impl(
   v1: [i64; N] @ val.v1,
   v2: [i64; N] @ val.v2,
   v3: [i64; N] @ val.v3)
-  -> i64 @ node(val.result)
+  -> i64 @ val.out
   impls select_sum,... {
-    let s1 : i64 @ node(val.sum1) = sum_cpu(v1);
-    let cond : bool @ node(val.condition) = s1 < 0;
-    let res : @ node(val.result) = if cond {
-        let s2 : i64 @ node(val.sum2) = sum_cpu(v2);
+    let s1 : i64 @ val.sum1 = sum_cpu(v1);
+    let cond : bool @ val.condition = s1 < 0;
+    let res : @ val.result = if cond {
+        let s2 : i64 @ val.sum2 = sum_cpu(v2);
         s2
     }
     else {
-        let s3 : i64 @ node(val.sum3) = sum_cpu(v3);
+        let s3 : i64 @ val.sum3 = sum_cpu(v3);
         s3
     };
     res
 }
 \end{lstlisting}
 %
-Our focus in this rewrite is to expose the (baseline) types used by a Caiman implementation.  Each variable in an implementation has 2 components: an raw datatype and three specification types (we are only showing the value specification type for now for simplicity).  \code{s1}, for example, has a raw datatype of \code{i64}, and a (value) specification type of \code{node(val.sum1)}.
+Our focus in this rewrite is to expose the (baseline) types used by a Caiman implementation.  Each variable in an implementation has 2 components: an raw datatype and three specification types (we are only showing the value specification type for now for simplicity).  \code{s1}, for example, has a raw datatype of \code{i64}, and a (value) specification type of \code{val.sum1}.
 
-The part of the type \code{node(val.sum1)} has three pieces, \code{node}, \code{val}, and \code{sum1}, with the following meanings:
+The part of the type \code{node(val.sum1)} has two pieces, \code{val}, and \code{sum1}, with the following meanings:
 %
 \begin{itemize}
-\item \code{node} states that the given type is a node in some specification function (as opposed to an \code{input} or an \code{output} to that specification)
 \item \code{val} states that the given type is a part of the value specification this function is implementing, \code{select_sum} in this case
-\item \code{sum1} states that we are working with the specific node named \code{sum1}.
+\item \code{sum1} states that we are working with the specific node within our value specification named \code{sum1}.
 \end{itemize}
 %
 Crucially, this is part of the type of the implementation variable as much as the datatype \code{i64}, though the specification type can be erased when compiling Caiman code.  In other words, if we instead wrote the (incorrect) annotation:
@@ -356,7 +355,7 @@ if sum_cpu(v1) < 0 {
 First, we reiterate our value specification for ease of readability:
 %
 \begin{lstlisting}
-val select_sum(v1: [i64; N], v2: [i64; N], v3: [i64; N]) -> i64 {
+val select_sum(v1: [i64; N], v2: [i64; N], v3: [i64; N]) -> out: i64 {
     sum1 :- sum(v1)
     sum2 :- sum(v2)
     sum3 :- sum(v3)
@@ -369,8 +368,8 @@ val select_sum(v1: [i64; N], v2: [i64; N], v3: [i64; N]) -> i64 {
 Second, we provide a timeline specification for a \emph{single} synchronization (since we only call the gpu once in each branch, we need only to synchronize once).  As a result, our specification will simply lay out our four stages in sequence:
 %
 \begin{lstlisting}
-tmln single_sync(e : Event) -> Event {
-    local, remote :- encoding_event(e)
+tmln single_sync(in : Event) -> out : Event {
+    local, remote :- encoding_event(in)
     sub :- submission_event(remote)
     sync :- synchronization_event(local)
     returns sync
@@ -701,11 +700,15 @@ With explication, we still need to provide a header (arguments and return types)
 
 The Caiman \emph{explicator} can use then types we have given this function to deduce some program that matches these types.  The explicator will not, however, be able to use any other specifications than those given, meaning that it is often the case that no such program exists.  For instance, if we had excluded \code{v1} from our arguments, the \code{select_sum} specification provides no way to construct \code{v1}, and so the explicator would fail to produce a solution.
 
-Importantly, however, the explicator makes almost no guarantee about which program it will produce.  The only requirement we state is that, for a given explication implementation and for a given specification and (partial) implementation, the explicator will produce the same Caiman program -- in other words, the explicator must be deterministic.  
-
-With our current implementation of Caiman, for example, the explicator makes no attempt to optimize the program being produced, and only the first valid program it happens to find is emitted.  The explication results are written to be somewhat transparent to help with identifying issues (we will show some examples of explicated programs in Appendix \xxx{TODO}), but it is theoretically preferable to avoid specific guarantees.
-
-As a result, a key design insight for using Caiman explication is the ability to explicate a partially--implemented program.  As a concrete example, let us restrict the explicator for \code{select_sum} to ensure that the sum of \code{v2} and \code{v3} are being calculated inside of the condition rather than before:
+Importantly, however, the explicator is somewhat possible to control outside of this strictly open \code{???} hole we just defined.  More precisely, we can summarize our explicator requirements with three rules:
+%
+\begin{enumerate}
+\item The synthesized code must typecheck according to our given inputs and outputs, and as defined by our specification.
+\item For a fixed implementation and fixed specifications if the explicator produces a program, the explicator must always produce the same program.  That is, the explicator must be deterministic for the resulting program.
+\item Any operations provided by the programmer must be used in the order they were written.  Additionally, new operations can only be added where we have a multiline hole (\code{???})
+\end{enumerate}
+%
+The last of these rules, the ordering of operations, is the key piece of the Caiman explicator design that allows for performance manipulation without adjusting the specification (or writing many implementation functions).  We will describe precisely what this rule entails after exposing more of Caiman's implementation in Section~\ref{subsec:control}.  For now, as a concrete example, let us restrict the explicator for \code{select_sum} to ensure that the sum of \code{v2} and \code{v3} must be calculated before the condition:
 %
 \begin{lstlisting}
 fn select_sum_expl_2(
@@ -714,19 +717,57 @@ fn select_sum_expl_2(
   v3: [i64; N] @ val.v3
 ) -> i64 : val.out 
   impls select_sum,trivial_time,trivial_space{
-  if ? {
-    ???
-  }
-  else {
-    ???
-  }
+  .. = sum(v2);
+  .. = sum(v3);
+  ???;
 }
 \end{lstlisting}
 %
+The key addition to this code is that we have stated that both \code{sum(v2)} and \code{sum(v3)} must be computed and stored (in the unnamed variable \code{..}) before any other computation can be done.  With respect to our explication rules, the order here is important -- by having the \code{???} after these computations, we've required that the explicator can't insert code that we don't expect before these operations.
 
+Of course, the more important reason to introduce to explicator is to help with exploring the more detailed (and complicated) device communication space.  Fortunately, we have introduced enough of Caiman design to use the explicator to help us with writing more complicated with the GPU, taking advantage of the bounds imposed by the timeline specification along with our current value specification.  We first write the timeline specification as shown in Section~\ref{subsec:fullexample} (restated here to help with readability):
+%
+\begin{lstlisting}
+
+tmln single_sync(in : Event) -> out : Event {
+    local, remote :- encoding_event(in)
+    sub :- submission_event(remote)
+    sync :- synchronization_event(local)
+    returns sync
+}
+\end{lstlisting}
+%
+And now we can write our implementation, providing some structure to ensure we achieve our desired behavior of only encoding and syncing with the GPU once depending on our condition:
+%
+\begin{lstlisting}
+
+fn select_sum_expl_gpu(
+  v1: [i64; N] @ val.v1, 
+  v2: [i64; N] @ [val.v2, tmln.in], 
+  v3: [i64; N] @ [val.v3, tmln.in]) 
+  -> i64 @ [val.out, tlmn.out] 
+  impls select_sum,single_sync,trivial_spatial {
+    if sum(v1) < 0 {
+        ???
+    }
+    else {
+        ???
+    } 
+}
+\end{lstlisting}
+%
+Since we have only allowed work within each branch of the condition, we can be confident that we will compute \code{v2} and \code{v3} respectively.  Additionally, our restriction that our inputs are associated with \code{tmln.in} and our outputs are associated with \code{tmln.out} means that we must have synced with a device to produce these results.  Strictly speaking, Caiman does not guarantee which device is used, as in our current explicator implementation we only allow synchronization with the GPU; this would, however, not be difficult to change.
+
+A slightly more interesting observation is that eliding the condition here (\code{if sum(v1) < 0}) will result in the same program in this particular case, due to the way we have written our timeline specification.  By both specifying we can only synchronize with the GPU once, only providing a definition for a single \code{sum} kernel, and requiring that we produce a result with \code{tmln.out}, we have restricted our implementation sufficiently that there is only one viable solution.  This sort of constraint can be difficult to observe in practice, however, motivating the use of partial implementations such as the condition shown here in cases where the programmer explicitly desires this structure.
+
+The other important consequence of observing the extent by which Caiman specifications restrict implementation is how many specification and partial implementations arrangements result in an overconstrained and unsolvable system.  This can be seen as advantageous, in that attempting an explication can save a programmer significant effort after reaching an impossible--to--proceed state, but the explicator may instead time out without resolution.  Consequently, transparent messaging is important when working with the explicator, both information about what the explicator was able to produce and where it may have become stuck.  The specific engineering around the explicator and user messaging will be explored in Section~\ref{subsec:compilation}.
+
+For the remainder of this section, we will examine the algorithm used by the Caiman explicator.  Before we can do so, however, we need to expose a lower--level representation of Caiman code, the Caiman IR.
 
 \subsection{Caiman IR}
 \label{subsec:ir}
+
+
 
 \subsection{Core Algorithm}
 
@@ -739,6 +780,7 @@ fn select_sum_expl_2(
 \subsection{WebGPU Target and Codegen}
 
 \subsection{Stages of Compilation}
+\label{subsec:compilation}
 
 \section{Results}
 \label{sec:results}
