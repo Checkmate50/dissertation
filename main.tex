@@ -146,7 +146,7 @@ text width=4em, text centered, rounded corners, minimum height=4em]
 \renewcommand{\textfraction}{0.1}
 \renewcommand{\floatpagefraction}{0.75}
 
-\title {Language Design for Geometry and Heterogeneous Reasoning in Graphics Programming}
+\title {Language Designs for Geometry and Heterogeneous Reasoning in Graphics Programming}
 \author {Dietrich Geisler}
 \conferraldate {August}{2024}
 \degreefield {Ph.D.}
@@ -162,18 +162,12 @@ text width=4em, text centered, rounded corners, minimum height=4em]
 \mathligson
 
 \begin{abstract}
-\xxx{TODO: update from Gator Abstract}
-In domains that deal with physical space and geometry,
-programmers need to track the coordinate systems that underpin a computation.
-We identify a class of \emph{geometry bugs} that arise from confusing which coordinate system a vector belongs to.
-These bugs are not ruled out by current languages for vector-oriented computing, are difficult to check for at run time, and can generate subtly incorrect output that can be hard to test for.
+\xxx[dg]{TODO: fix up?}
+There has been growing demand for 3D image rendering in the past several decades, primarily from video games, but also from fields as broad as film, art, architecture, and scientific simulation.  A major challenge with expanding use of rendering, however, is that the programming is difficult, requiring significant field expertise when abstractions break down.
 
-We introduce a type system and language that prevents geometry bugs by reflecting the coordinate system for each geometric object.
-A value's \emph{geometry type} encodes its reference frame, the kind of geometric object (such as a point or a direction), and the computational representation (such as Cartesian or spherical coordinates).
-We show how these types can rule out geometrically incorrect operations,
-and we show how to use them to automatically generate correct-by-construction code to transform vectors between coordinate systems.
-We implement a language for graphics programming, Gator, that checks geometry types and compiles to OpenGL's shading language, GLSL.
-Using case studies, we demonstrate that Gator can raise the level of abstraction for shader programming and prevent common errors without inducing significant annotation overhead or performance cost.
+In this dissertation, we will examine how we may be able to design programming languages to ameliorate some of these challenges.  Our goal will be to examine two specific challenges in graphics programming reasoning: geometric correctness and performance in heterogeneous device communication.  
+
+In the first part of this talk, we will discuss Gator, a language which provides type-level reasoning for a class of bugs we describe as "geometry bugs", as well as a lightweight mechanism to reason about operations on geometry.  In the second part of this talk, we will discuss Caiman, a language which typechecks heterogeneous implementations against a fixed specification.  We will also examine how Caiman's type-level restrictions allow for separating performance and correctness, as well as providing a mechanism for restricted synthesis of heterogeneous programs.
 \end{abstract}
 
 \begin{biosketch}
@@ -212,9 +206,14 @@ Your acknowledgements go here. Make sure it sits inside the brackets.
 
 \input{caimanmain}
 
+\chapter{Conclusion and Future Directions}
+
+\xxx[dg]{TODO}
+
 \appendix
 \chapter{Chapter 1 of appendix}
-Appendix chapter 1 text goes here
+\xxx[dg]{TODO: load in Gator and Comm Appendices}
+\xxx[dg]{TODO: Write Caiman Appendices}
 
 % Notes to self wrt Caiman appendix:
 % 1. formal proof

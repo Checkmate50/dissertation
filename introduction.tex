@@ -1,1 +1,36 @@
-This is an introduction.  
+\xxx[dg]{As a blanket note, I'll add references to this section later}
+
+Computer graphics has long been a core field of study within computer science.  In the past decade alone, computer graphics has seen application in video games, animated film, scientific simulation, data visualization, and medical devices.  The term computer graphics itself has become so broad as to be fuzzy; we refer here specifically to the study of modeling and rendering snapshots of 2 or 3-dimensional spaces onto a screen.
+
+Despite the number of applications and domains that make use of computer graphics, maintaining or using software systems for rendering (such as a \emph{rendering engine}) can be extremely difficult and time--consuming.  Manipulating a rendering engine can require specialized learning in topics as diverse as light physics, geometry, visual design, and material science.  Additionally, the history of these specialized topics can often find themselves at odds with the practical realities of building a performant computer system, resulting in complex engineering constraints and implicit rules for manipulating code.
+
+As a consequence of this complexity, computer graphics has many domain--specific challenges that have been solved through sheer engineering prowess and, to put it bluntly, hacks on the tools available.  For instance, game engines are frequently specialized to C++ engineering, relying on macros to control performance characteristics and providing highly specialized program behavior.  Similarly GPUs come equipped with a rendering pipeline originally meant for the usual case of computer graphics, but as programmer specialization has outpaced hardware design, the GPU rendering pipeline has been taken apart and pieced back together to squeeze more performance or a specific behavior out of this hardware.
+
+These challenges in graphics programming have real cost: large--scale rendering engines can be difficult to update for new technologies (such as Unreal Engine lumbering towards supporting raytracing), non--experts can be forced to rely on black--box implementations without any realistic mechanism to customize these implementations, and performance can be left on the table in critical applications (there are some interesting examples of this, I need to find ``good references" though).
+
+The sheer breadth and complexity of these computer graphics and rendering systems, however, poses a unique opportunity for programming language designers.  Improvements in languages for graphics specifically could provide mechanisms that keep up with graphics programmer needs faster than hardware design, and can expose domain--specific design challenges with interesting consequences for language research as a whole (I have a couple of citations here related to sampling theory).
+
+Despite there being both potential and real need for graphics--specific programming language design, this focus of study has remained largely untapped.  Notable efforts in this direction include languages for static and dynamic reasoning about the rendering pipeline and specialized languages for automatic and symbolic differentiation in geometric spaces.  There are, however, few other high--profile efforts, despite anecdotally there remaining many potentially interesting problems (which will be further discussed in Section~\ref{subsec:problems}).
+
+\subsection{Summary of Work}
+
+In this dissertation, we present work that both identifies and provides language--level solutions for two specific challenges in graphics programming: geometric reasoning and performance exploration.  In both cases, we identify properties of graphics programs which are either stated informally or otherwise known to the programmer, but are not communicated to the typechecker and compiler.  Without this necessary context for the intended program semantics, the programmer loses the benefits of static typechecking and compiler optimizations, and may be forced to introduce the various C++ hacks described earlier.
+
+Concretely, we describe three pieces of work:
+%
+\begin{itemize}
+\item Gator, a language for providing semantics and typechecking for graphics--style geometry
+\item A paper on commutative diagram verification needed to solve a technical problem within Gator
+\item Caiman, a language for providing type--level support for heterogeneous performance exploration
+\end{itemize}
+%
+Both Gator and the commutative diagram paper have been previously published.
+
+Chapter 2 explores the relationship between the geometry of a scene being rendered and the code used to calculate properties of that scene through the lens of the Gator language.  By identifying and naming three commonly--needed pieces of geometric information, Gator is able to provide geometry-aware types and semantics for several core graphics algorithms.  We also show how introducing these types enables the Gator compiler to safely synthesize light--weight geometric transformations.  The guarantees Gator aims to provide, however, resulted in needing a solution for online verification of commutative diagrams, a technical layer described further in Chapter 3.
+
+Chapter 4 changes our focus to the performance concerns of graphics programmers, and specifically the narrow problem of inter--device communication, or heterogeneous programming.  We introduce a language, Caiman, which provides a type system and compiler implementation for separating semantic and performance concerns in heterogeneous settings.  We additionally develop and implement an algorithm for synthesizing these (otherwise complex) transformations in a type--directed and decomposable way, allowing a programmer to explore performance characteristics of a compiled program while maintaining control over the details of that program.
+
+\subsection{Open Directions}
+\label{subsec:problems}
+
+I plan to think about this section more, I'll defer on writing it for now.
