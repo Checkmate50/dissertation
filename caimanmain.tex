@@ -7,9 +7,6 @@ A major reason for the complexity of accelerator programming comes from the sign
 
 This cost has been explored in several works in the form of automatic compiler optimizations \xxx[dg]{TODO: add references}, which rely on the compiler to generate communications or kernels based on some heuristic.  Standard GPU compilers have implemented some of these methods \xxx[dg]{TODO: I need to see if I can find a good reference to validate this particular claim}.  Despite these advances, anecdotally programmers are still optimizing performance--critical communication by hand.  This is (at least partially) due to the need for experimentation and profiling in performance--critical code, where a given solution may not perform optimally in all heterogeneous arrangements and even within a given codebase.
 
-As our concrete motivating example of this challenge, graphics programmers often have the need to write very context--aware shaders (the graphics equivalent of kernels), with parts of the shader enabled or disabled depending on static optimization decisions and dynamic information.  To manage this, shader programmers often end up resorting to complicated macros or metaprogramming, where options can be disabled or enabled across code, but also creating a brittle system where adjusting one shader could lead to cascading issues with performance and even program correctness.  Examples of this approach can be clearly seen in the open--source Unreal Engine codebase \xxx[dg](TODO: formally cite these, but just some random examples of this: \footnote{\url{https://github.com/EpicGames/UnrealEngine/blob/release/Engine/Shaders/Private/InstanceCulling/InstanceCullingLoadBalancer.ush}} and \footnote{\url{https://github.com/EpicGames/UnrealEngine/blob/release/Engine/Shaders/Private/HairStrands/HairStrandsClusterCommon.ush}}, which you may or may not be able to see, they just have a bunch of these macros).
-
-
 We argue, without any meaningful way to prove or refute this claim, that heterogeneous programming is diverse enough and performance--critical enough, that such hand--optimized solutions will continue to be important for kernel and shader engineers.  As a result, we propose a solution that raises the level of abstraction for performance engineering, but engineered so that the layer of abstraction being constructed is both transparent and decomposable.  We start by making more concrete the specific challenges we have observed while hand--optimizing kernels, specifically separating performance and correctness, and managing a combinatorial explosion of kernel interactions.
 
 \subsection{Performance Experimentation}
@@ -707,6 +704,8 @@ Finally, both Hatchling programs must specify an output type.  For the Hatchling
 	\label{fig:impltyping}
 \end{figure}
 
+\xxx[dg]{TODO: The typing semantics we use should be more--or--less self explanatory as--is, but I'll take another look when I write up the appendix proof in latex properly}
+
 \subsection{Operational Semantics}
 
 \xxx[dg]{I don't think I actually need operational semantics, since they sort of ``fall out" from the simplified model I decided to go with}
@@ -1101,8 +1100,6 @@ Note that we must include this specific \code{encode-do} to be sure that we are 
 
 \subsection{Core Algorithm}
 
-We now have the context to define an explication algorithm.  Generally speaking, our approach will be to make arbitrary (type--safe) decisions for the first node of the funclet, recurse to see if we produce a valid explication result, and then try the next decision we could make.  Conceptually this algorithm resembles a depth first search through the decisions we could make, and if we find a type--safe result, we simply return this result.
-
 \begin{algorithm}[tb]
 \DontPrintSemicolon
 \KwData{A list of solved Caiman IR Nodes, a set of nodes we have yet to use, and the current Caiman IR funclet.}
@@ -1136,8 +1133,7 @@ Funclet funclet\;
     \For{solution $\in$ ValidSolutions(nodes, index, funclet)}{
         usedNodes $\gets$ \textit{GetUsedNodes}(solution)\;
         solutionRequests $\gets$ \textit{GetMultilineRequests}(solution, solvedNodes)\;
-        
-\tcp*{copy nodes, with our solution added}
+        \tcp*{copy nodes, with our solution added}
         newNodes $\gets$ nodes + solution\;
         newUnusedNodes $\gets$ (unusedNodes $\cup$ currentNode) $\setminus$ usedNodes\;
         result $\gets$ \textit{NodeExplication}(newNodes, unusedNodes, funclet)\;
@@ -1153,7 +1149,9 @@ Funclet funclet\;
 \label{algo-explication-node}
 \end{algorithm}
 
-The algorithm used to explicate a node of a Caiman IR funclet is more precisely described in Algorithm~\ref{algo-explication-node}.  We start this recursion with an empty list of solved nodes, all of our funclet inputs in the set of unused nodes, and our funclet definition.  Note that the funclet definition we provide is intended as a static reference, and is not modified as we recurse.  
+We now have the context to define an explication algorithm.  Generally speaking, our approach will be to make arbitrary (type--safe) decisions for the first node of the funclet, recurse to see if we produce a valid explication result, and then try the next decision we could make.  Conceptually this algorithm resembles a depth first search through the decisions we could make, and if we find a type--safe result, we simply return this result.
+
+The algorithm used to explicate a node of a Caiman IR funclet is more precisely described in~\ref{algo-explication-node}.  We start this recursion with an empty list of solved nodes, all of our funclet inputs in the set of unused nodes, and our funclet definition.  Note that the funclet definition we provide is intended as a static reference, and is not modified as we recurse.  
 
 If \textit{NodeExplication} returns \textbf{NONE}, then no solution was found.  If this function returns a pair that includes a list of any requests for multiline explication, then we continue the recursion with the next solution for the first node.  Otherwise, we accept the valid explication solution as the list of explicated nodes (along with an explicated tailedge, which is elided in the result for readability).
 
