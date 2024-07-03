@@ -118,16 +118,16 @@ To help address these problems with performance experimentation in heterogeneous
 \item We describe functions that are decomposable, in that a function implementation can be broken apart so that parts can be used by other implementations without duplicating the entire function, all without breaking Caiman's type--level guarantees of matching implementation to definition.
 \item We describe and implement a system within Caiman to harness type--directed program synthesis to help reduce the overhead of performance experimentation and to allow transparency into compiler optimizations.
 \item We provide a syntax and implementation for both human--writeable Caiman with the above guarantees, and a more precise Caiman IR for analysis and precise operational control.
-\item We demonstrate the performance tradeoffs for several WebGPU kernels, and show that a Caiman implementation of these kernels allows a similar performance exploration \xxx[dg]{This last point is still a WIP, and may need to be refined}
+\item We demonstrate the performance tradeoffs for several synthetic WebGPU kernels, and show that a Caiman implementation of these kernels allows a similar performance exploration.
 \end{itemize}
 
 \section{Related Work}
 
 \paragraph{Scheduling Languages}
 
-The philosophy of Caiman is very similar to that of scheduling languages such as Halide\footnote{\url{https://people.csail.mit.edu/jrk/halide-pldi13.pdf}} and Exo\footnote{\url{https://exo-lang.dev/}} \xxx{TODO: Add proper citations, maybe add Taco or a few others}.  The Caiman strategy of separating performance and implementation concerns is inspired by these sorts of scheduling languages, and indeed the direction for Caiman was initially written to be a scheduling language for heterogeneous interactions.  
+The philosophy of Caiman has overlap with scheduling languages such as Halide\footnote{\url{https://people.csail.mit.edu/jrk/halide-pldi13.pdf}}, Taco\footnote{\url{https://people.csail.mit.edu/s3chou/files/senanayake-oopsla20-taco-scheduling.pdf}}, and Exo\footnote{\url{https://exo-lang.dev/}}.  The Caiman strategy of separating performance and implementation concerns is inspired by these sorts of scheduling languages, and indeed the direction for Caiman was initially written to be a scheduling language for heterogeneous interactions.  
 
-Despite this core inspiration, Caiman navigates the specific challenges of heterogeneous programming differently than the scheduling languages we are aware of.   Most notably, Caiman emphasizes design for the combinatoric explosion of kernel design described in~\ref{subsec:combinatoric} and introduces type requirements for the multithreading and condition logic present in heterogeneous decision making.
+Despite this core inspiration, Caiman navigates the specific challenges of heterogeneous programming differently than the scheduling languages we are aware of.   Most notably, Caiman emphasizes design for the combinatoric explosion of kernel design described in~\ref{subsec:combinatoric} and introduces type requirements for the multi--threading and condition logic present in heterogeneous decision making.
 
 \paragraph{CUDA, SYCL}
 
@@ -561,8 +561,8 @@ We will address this concern with a core piece of the Caiman design when we disc
         \\
     p &\defas d.\textrm{returns}\, \psi
 \end{align*}
-\caption{Hatchling Specification Syntax}
-\label{fig:hatchspecsyntax}
+\caption{Spawnling Specification Syntax}
+\label{fig:spawnspecsyntax}
 \end{figure}
 
 \begin{figure}
@@ -575,27 +575,24 @@ We will address this concern with a core piece of the Caiman design when we disc
         x\leftarrow f_\psi(x_1) \,| \tau x \,|\, x\leftarrow\textrm{select}_{\psi} (x_1, x_2, x_3)\\
     p&\defas c;\textrm{return}\, x
 \end{align*}
-\caption{Hatchling Implementation Syntax}
-\label{fig:hatchimplsyntax}
+\caption{Spawnling Implementation Syntax}
+\label{fig:spawnimplsyntax}
 \end{figure}
-
-\xxx[dg]{I include alloc, copy, and ref here because it feels like I need to be clear about the imperative nature of Caiman's implementation, but I actually think these end up being pretty non--interesting.  I feel like the rest of the formalism is enough in retrospect.}
-
 In this section, we will be describing a formal model of the Caiman language. We will use this to prove our assertion that the Caiman typechecker will ensure a given (typed) implementation has the same (observational) semantics as a specification it implements.  We will also be more formally specifying these terms to precisely narrow our claim, and addressing the limitations of this presented approach.
 
-To do this, we will start by describing a subset of the Caiman IR, a language called \textit{Hatchling}.  Hatchling has operations similar to the types and control flow of the Caiman IR, with the goal of describing exactly the type guarantees made by Caiman.
+To do this, we will start by describing a subset of the Caiman IR, a language called \textit{Spawnling}.  Spawnling has operations similar to the types and control flow of the Caiman IR, with the goal of describing exactly the type guarantees made by Caiman.
 
-As with the Caiman IR, Hatchling has a specification and an implementation.    Our primary goal will be to setup a proof of the following theorem (although the detailed proof itself will be left to Appendix TODO):
+As with the Caiman IR, Spawnling has a specification and an implementation.  Our primary goal will be to setup infrastructure for, but not prove, the following theorem:
 %
 \begin{theorem}
-Any well-typed Hatchling implementation program with types matching those of a well-typed Hatchling specification program must, for all inputs, either fail to terminate or produce equivalent values as that specification program.
+Any well-typed Spawnling implementation program with types matching those of a well-typed Spawnling specification program must, for all inputs, either fail to terminate or produce equivalent values as that specification program.
 \end{theorem}
 %
 As an observation about this proof, the term \textit{equivalent outputs} relies on a precise notion of equivalence and values in this context.  Specifically, equivalence is defined exactly as any function that is a member of its function class (as described in subsection~\ref{subsec:equivalence}), while value refers to the series of operations that define some result.  In this sense, we observe that the operation $1+1$ is not considered to be the same value as the constant $2$, unless an equivalence is explicitly stated.
 
-The syntax for each of these Hatchling sub-languages are defined in figures~\ref{fig:hatchspecsyntax} and~\ref{fig:hatchimplsyntax}, respectively.  These syntax rely on external sets of distinct symbols, namely $\mathbf{T}$, $\textbf{S}$, $\textbf{P}$, $\mathbf{V}$, and $\mathbf{F}$.  These sets have no explicit meaning, but intuitively represent the sets of types, specification variables, function classes, implementation variables, and function names, respectively.  Function calls in Hatchling only allow a single argument -- the extension of these proofs to multiple arguments is straightforward but mechanically irksome.  We assume that the set of types $\mathbf{T}$ includes the type $\textrm{unit}$, which we use in the typechecking semantics.  We also assume the set of specification variable symbols $\mathbf{S}$ and the set of function classes $\mathbf{C}$ includes $\mathbf{0}$, a special character that cannot be assigned to and indicates a lack of dependence.
+The syntax for each of these Spawnling sub-languages are defined in figures~\ref{fig:spawnspecsyntax} and~\ref{fig:spawnimplsyntax}, respectively.  These syntax rely on external sets of distinct symbols, namely $\mathbf{T}$, $\textbf{S}$, $\textbf{P}$, $\mathbf{V}$, and $\mathbf{F}$.  These sets have no explicit meaning, but intuitively represent the sets of types, specification variables, function classes, implementation variables, and function names, respectively.  Function calls in Spawnling only allow a single argument -- the extension of these proofs to multiple arguments is straightforward but mechanically irksome.  We assume that the set of types $\mathbf{T}$ includes the type $\textrm{unit}$, which we use in the typechecking semantics.  We also assume the set of specification variable symbols $\mathbf{S}$ and the set of function classes $\mathbf{C}$ includes $\mathbf{0}$, a special character that cannot be assigned to and indicates a lack of dependence.
 
-A Hatchling specification program additionally requires 2 contexts, 1 dynamic and 1 static:
+A Spawnling specification program additionally requires 2 contexts, 1 dynamic and 1 static:
 \begin{itemize}
 \item 
 $\Psi:\mathbf{S}\mapsto
@@ -607,7 +604,7 @@ $\Psi:\mathbf{S}\mapsto
 \item $\Phi:\mathbf{C}\mapsto\mathbf{T}\bigtimes\mathbf{T}$, which is static and maps from function classes to the input type and the output type of that function.
 \end{itemize}
 
-A Hatchling implementation program, on the other hand, similarly requires only 1 dynamic context, but requires 3 constant global contexts (where $\Delta$ and $\Psi$ are built to be derived from the specification associated with the current implementation).  These contexts are as follows:
+A Spawnling implementation program, on the other hand, similarly requires only 1 dynamic context, but requires 3 constant global contexts (where $\Delta$ and $\Psi$ are built to be derived from the specification associated with the current implementation).  These contexts are as follows:
 \begin{itemize}
 \item $\Gamma:\mathbf{V}\mapsto\mathbf{T}\bigtimes\left(\mathbf{S}\cup\top\right)$, the sole dynamic context, which maps from an implementation pointer to the type of the data being referred to by that pointer.  This context also includes the associated value if one has been written to the location pointed at by this variable.
 \item $\Psi:\mathbf{S}\mapsto
@@ -615,12 +612,12 @@ A Hatchling implementation program, on the other hand, similarly requires only 1
 \left(\mathbf{C}\bigtimes
 \left(\mathbf{S}\bigtimes\mathbf{S}\bigtimes\mathbf{S}\right)
 \right)$
-, which must be derived from the result of applying the typechecking rules to a well-typed Hatchling specification.  When typechecking an implementation, however, $\Psi$ is global and constant.
+, which must be derived from the result of applying the typechecking rules to a well-typed Spawnling specification.  When typechecking an implementation, however, $\Psi$ is global and constant.
 \item $\Phi:\mathbf{C}\mapsto\mathbf{T}\bigtimes\mathbf{T}$, which is the same as with the specification program
 \item $\Xi:\mathbf{F}\mapsto\mathbf{C}$, which maps from functions to their owning function class
 \end{itemize}
 
-Finally, both Hatchling programs must specify an output type.  For the Hatchling specification program, we denote this as $\tau_\textrm{out}$, while for the Hatchling implementation program, we denote this as $\psi_\textrm{out}$.  Note that we assume that a function being a member of $\Phi$ implies that it is a well--typed function.
+Finally, both Spawnling programs must specify an output type.  For the Spawnling specification program, we denote this as $\tau_\textrm{out}$, while for the Spawnling implementation program, we denote this as $\psi_\textrm{out}$.  Note that we assume that a function being a member of $\Phi$ implies that it is a well--typed function.
 
 \subsection{Typing Semantics}
 
@@ -663,7 +660,7 @@ Finally, both Hatchling programs must specify an output type.  For the Hatchling
    		{\Psi,\Psi' |- d \qquad \Psi'(\psi)=(\tau_\textrm{out},\_)}
    		{\Psi,\Psi' |- d.\textrm{return}\,\psi}
 	\end{mathpar}
-	\caption{Hatchling Specification Typing Judgment}
+	\caption{Spawnling Specification Typing Judgment}
 	\label{fig:spectyping}
 \end{figure}
 
@@ -700,7 +697,7 @@ Finally, both Hatchling programs must specify an output type.  For the Hatchling
    		{\Gamma,\Gamma' |- c, \Gamma'(x)=\psi_\textrm{out}}
         {\Gamma,\Gamma' |- c;\textrm{return}\, x}
 	\end{mathpar}
-	\caption{Hatchling Implementation Typing Judgment}
+	\caption{Spawnling Implementation Typing Judgment}
 	\label{fig:impltyping}
 \end{figure}
 
@@ -1041,7 +1038,7 @@ In this GPU implementation, we hint at type rules to manage memory allocations w
 
 \subsection{Explication of Caiman IR}
 
-\xxx[dg]{Note that our actual explicator implementation for this example at this time of writing is missing a couple of implementation details that are described here.  Specifically \code{???} is not carefully tested, and \code{begin_encoding} is not fully implemented}.
+Note that, at the time of this writing our actual explicator implementation for this example at this time of writing is missing a couple of implementation details that are described here.  Specifically \code{???} is not carefully tested, and \code{begin_encoding} is not fully implemented.
 
 With our more-exact representation of Caiman IR in hand, we can provide a precise definition of Caiman's explication syntax.  Caiman allows exactly two synctatic ``holes", defined as follows:
 %
@@ -1179,23 +1176,29 @@ While we have not enumerated every implementation operation we have presented, i
 
 \xxx[dg]{Currently the multiline implementation shown here does not support conditional control flow, but neither does the current implementation in Caiman.  If I am able to get that implemented, I'll include a passage on it here}.
 
-While Caiman does currently use the algorithm we have described for explication, the critical takeaway is that there \emph{exists} an algorithm that satisfies our requirements from earlier.  Practically, we expect that pushing parts of this explication algorithm to a solver or synthesis tool may help with explicator performance and scalability.  This being said, a quantitative and qualitative analysis of using Caiman's explication approach will be discussed in Section~\ref{subsec:explicationresults}
+While Caiman does currently use the algorithm we have described for explication, the critical takeaway is that there \emph{exists} an algorithm that satisfies our requirements from earlier.  Practically, we expect that pushing parts of this explication algorithm to a solver or synthesis tool may help with explicator performance and scalability.  This being said, a qualitative analysis of using Caiman's explication approach will be discussed in Section~\ref{subsec:explicationresults}
 
 \section{Caiman Engineering}
 \label{sec:engineering}
 
-\xxx[dg]{For the sake of getting some sleep, I'm going to defer writing up this section.  There isn't anything too ``surprising" here, except that Caiman is a pretty massive chain of compiler passes and AST analyses and transformations at this point.  Basically the goal of this section is to give some sense of the engineering decisions we made to help motivate the results and give a sense of some of the engineering decisions we made.}
+We have built an implementation of the Caiman language and Caiman IR as a toolchain we will refer to as the Caiman compiler.  For our implementation\footnote{https://github.com/cucapra/caiman}, we take in Caiman or Caiman IR code, apply explication and semantic analysis, and emit Rust code to connect Rust (on the CPU) and WebGPU (on the GPU) through the WGPU\footnote{https://wgpu.rs/} interface.
 
-\subsection{WebGPU Target and Codegen}
+Our choice to emit Rust and WGPU is somewhat arbitrary -- indeed, practically we would recommend that future work on a Caiman compiler instead target an IR rather than Rust directly, and a lower--level interface like the Vulkan API\footnote{https://www.vulkan.org/}.  Nevertheless, our implementation of Caiman shows how we can construct graphics--focused and dynamic CPU/GPU code, more concretely described in Section~\ref{sec:results}.
 
-\xxx[dg]{TODO}.
-
-For the sake of readability, this is probably the most important section.  The insight here is that Caiman currently compiles to Rust+WebGPU, which means our experiments will also work under this setup.  This observation is important because it means that any results we show may or may not extend to other GPU settings like CUDA or Vulkan.  Importantly, however, Caiman could target other backends, and this was a somewhat arbitrary choice, but our particular implementation does have impact on our design and results.
-
-\subsection{Stages of Compilation}
+\subsection{Compiler Infrastructure}
 \label{subsec:compilation}
 
 \xxx[dg]{TODO}
+
+The stages of work done by the Caiman compiler can be seen in Figure~\ref{fig:caiman-compiler}.  For the rest of this section, we will examine some of the technical details for each stage of compilation shown.
+
+\begin{figure}
+\includegraphics[width=.7\linewidth]{fig/texture.png}
+\label{fig:caiman-compiler}
+\caption{Structure of the Caiman Compiler}
+\end{figure}
+
+
 
 \section{Results}
 \label{sec:results}

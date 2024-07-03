@@ -1,0 +1,254 @@
+\section{Gator's Syntax}
+
+\subsection{Type System}
+
+\begin{gather*}
+c \in\text{constants}\\
+x \in\text{variables}\\
+p \in\text{primitives}\\
+t \in\text{types} \\
+\tau \defas \textrm{unit} \,|\, \top_p \,|\, \bot_p \,|\, t \\
+f \in \text{function names} \\ 
+\ifsemanticsdoc
+    Only binary functions are modeled in this document, however their treatment can be easily generalized to functions with an arbitrary number of inputs.
+\fi
+e \defas x \,|\, c \,|\, f(e_1, e_2) \,|\, x\ \textrm{as!}\ \tau \,|\, x\ \textrm{in}\ \tau\\
+C \defas \tau \, x = e \,|\, e \\
+P  =  C;P \,|\, \epsilon 
+\end{gather*}
+
+\section{Gator's static rules}
+
+  \begin{mathpar}
+	\inferrule
+	{\tau_1\leq\tau_2\qquad\Gamma\vdash e:\tau_1}
+	{\Gamma\vdash e:\tau_2}
+	
+	\inferrule
+	{\textrm{X}(c)=p}
+	{\Gamma\vdash c:\bot_p}
+	
+	\inferrule
+	{\Gamma(v)=\tau}
+	{\Gamma\vdash x :\tau}
+	
+	\inferrule
+	{\Gamma\vdash e : \tau\qquad\Gamma(v)=\tau}
+	{\Gamma\vdash \tau\ x = e:\textrm{unit}}
+	
+	\inferrule
+	{\Gamma\vdash C : \tau_1\qquad\Gamma\vdash P : \tau_2}
+	{\Gamma\vdash C;P:\textrm{unit}}
+	
+	\inferrule
+	{ }
+	{\Gamma\vdash \epsilon:\textrm{unit}}
+	
+	\inferrule
+	{\Gamma\vdash e: \top_p\qquad\tau\leq\top_p}
+	{\Gamma\vdash e\ \textrm{as!}\ \tau:\tau}
+	
+	\inferrule
+	{\Gamma\vdash e : \tau_1\qquad\textrm{P}(\tau_1,\tau_2)=f}
+	{\Gamma\vdash e\ \textrm{in}\ \tau_2:\tau_2}
+	
+	\inferrule
+	{\Gamma\vdash e_1:\tau_1\qquad\Gamma,\vdash e_2:\tau_2 \qquad \Phi(f,\tau_1,\tau_2)=\tau_3}
+	{\Gamma\vdash f(e_1,e_2):\tau_3}
+\end{mathpar}
+\label{fig:semantics}
+
+
+\section{Ordering rules}
+\begin{mathpar}
+\inferrule
+{ }
+{\tau\leq\tau}
+
+\inferrule
+{\tau_1 \leq \tau_2 \and \tau_2 \leq \tau_3}
+{\tau_1 \leq \tau_3}
+
+\inferrule
+{ }
+{\tau\leq\mathsf{unit}}
+
+\inferrule
+{ }
+{\bot_p\leq\top_p}
+
+\inferrule
+{\tau\leq\top_p}
+{\bot_p\leq\tau}
+\end{mathpar}
+\label{fig:subtype}
+
+\section{Target language grammar}
+Hatchling is an abstraction over sound imperative languages.
+
+It has an \textit{operation context} $\Xi$ that maps operator names and types to their implementation. $\Xi : (\textrm{operator names}), \tau_1, \tau_2 \rightarrow \textrm{type}$.
+
+We use the symbol $\tvdash$ for judgment in the target language
+
+\subsection{Hatchling's syntax}
+\begin{gather*}
+c \in\textrm{constants}\\
+x \in\textrm{variables}\\
+p\in\textrm{primitives}\\
+t\in\textrm{types}\\
+\tau ::= \textrm{unit} \,|\, \top_p \,|\, \bot_p \\
+o \in \textrm{operation names} \\
+e ::= x \,|\, c \,|\, o(e_1, e_2) \\
+c ::= \tau \, x = e\,|\, e \\
+P  =  c;P \,|\, \epsilon 
+\end{gather*}
+
+\subsection{Hatchling's static semantics}
+Subsumption
+\begin{mathpar}
+\infer[\subsumption]{\Gamma \tvdash e:\textrm{unit}, \Gamma}{\Gamma \tvdash e: \tau,\Gamma}
+\end{mathpar}
+
+Constants and variable declarations
+
+\begin{mathpar}
+ \infer[UNIT]{\Gamma \tvdash ():\textrm{unit}}{}
+\end{mathpar}
+\begin{mathpar}
+\infer[VAR]
+{\Gamma\vdash v:\tau}
+{\Gamma\vdash \Gamma(v)=\tau}
+\end{mathpar}
+\begin{mathpar}
+ \infer[PRIMITIVE]{\Gamma\vdash c:\bot_\mathsf{p}}{\Gamma\vdash X(c)=p} 
+\end{mathpar}
+\begin{mathpar}
+ \infer[DECL]{\Gamma \tvdash \tau x:=e:\textrm{unit}, x\mapsto \tau}{\Gamma\tvdash e:\tau}
+\end{mathpar}
+
+Operations
+
+\begin{mathpar}    
+\infer[OP]
+{\Gamma\vdash o(e_1,e_2):\tau_3}
+{\Gamma\vdash e_1:\tau_1\qquad\Gamma,\vdash e_2:\tau_2 \qquad \Gamma\vdash \Xi(o, \tau_1, \tau_2)=\tau_3} 
+\end{mathpar}
+
+
+\section{Translation}
+
+\subsection{Literals}
+\begin{gather*}
+\source{c} \triangleq c
+\end{gather*}
+
+\subsection{Types}
+\begin{gather*}
+\source{T} \triangleq \top_p \\
+\text{Where we know $\top_n$ is always defined because of the structure imposed on a well formed $\Delta$.}\\
+\source{\top_p} \triangleq \top_p \\
+\source{\bot_p} \triangleq \top_p \\
+\source{\textrm{unit}} \triangleq \textrm{unit} \\
+\end{gather*}
+
+\subsection{Expressions}
+\begin{align*}
+\source{c}_\Gamma &\triangleq c \\
+\source{x}_\Gamma &\triangleq x \\
+\source{\tau\ x := e}_\Gamma &\triangleq \source{\tau}\ x := \source{e}_\Gamma \\
+\source{e\ \mathrm{as!}\ \tau}_\Gamma&\triangleq \source{e}_\Gamma \\
+\source{e\ \mathrm{in}\ \tau_2}_\Gamma&\triangleq \source{f(e)}_\Gamma&\text{where }&\Gamma|-e:\tau_1\text{ and }f=\mathrm{P}(e,\tau_1,\tau_2)\\
+\source{f(e_1, e_2)}_\Gamma&\triangleq f'(e_1, e_2)&\text{where }&\Gamma|-e:\tau_1,\Gamma|-e:\tau_2,\text{ and }f'=\Psi(f,e_1,e_2,\tau_1,\tau_2)\\
+\source{\epsilon}_\Gamma&\triangleq \epsilon\\
+\source{C;P}_\Gamma&\triangleq\source{C}_\Gamma;\source{P}_\Gamma\\
+\end{align*}
+
+\subsection{}
+Additionally, we define the translation of $\Gamma$ and $\Phi$; in the target language, we replace every $\tau$ in the range of $\Gamma$ and $\Phi$ with its translation to get $\source{\Gamma}$ and $\source{\Phi}$. This is a different translation function than the one previously discussed, but for convenience we will use the same notation $\source{\Gamma}$ and $\source{\Phi}$.\\
+\begin{lemma}
+\label{lem:contexttr}
+\begin{mathpar}
+    \infer[]{
+            \source{\Gamma} \tvdash \source{\Gamma}(\source{x}_\Gamma):\source{\tau}}{
+                  {\source{\Gamma \vdash \Gamma(x) : \tau}_\Gamma}
+        }
+\end{mathpar}
+\begin{mathpar}
+    \infer[]{
+            \source{\Gamma} \tvdash \source{\Gamma}(\source{\Phi(f, \tau_1, \tau_2)}_\Gamma):\source{\tau}}{
+                  {\source{\Gamma \vdash \Phi(f, \tau_1, \tau_2) : \tau_3}_\Gamma}
+        }
+\end{mathpar}
+\end{lemma}
+
+\begin{proof}
+Follows from the definitions of $\source{\Gamma}$ and $\source{\Phi}$.
+\end{proof}
+
+\section{Proof that if source type checks then translation type checks}
+We use structural induction over Gator commands to show that any translation under a valid $\Delta$ type checks.
+In the process of the induction we use the theorem that if a Gator expression type checks then its translation does too. This is also shown using structural induction over all Gator expressions.
+\begin{theorem}
+    Given any Gator expression $e$ that type checks under some $\Gamma$ to produce $\tau$, we prove that its translation $\source{e}$ also type checks under $\source{\Gamma}$ to produce $\source{\tau}$.
+\end{theorem}
+\begin{theorem}
+	Given any Gator program $P$ that type checks under some $\Gamma$ to produce $\tau$, we prove that its translation $\source{e}$ also type checks under $\source{\Gamma}$ to produce $\source{\tau}$.
+\end{theorem}
+Below, I.H. = Inductive Hypothesis. Sometimes the inductive hypothesis is used over a general $\tau$. This implicitly excludes the special case of the polymorphic type.\\
+We use the inversion of the type checking rules in Gator; if a statement in Gator type checks then we know that the premise of the corresponding type checking rule is true. Using this rule will be marked as T.C. \\
+
+We split the proof into cases, one for each of the typing judgement rules in Gator.
+
+\subsection{Expressions Type Check}
+
+We present the most interesting case, for primitives. The other cases follow vry similarly.
+
+\paragraph{Primitive rule}
+\begin{mathpar}
+    \inferrule*[Right=\sub]{
+    \inferrule*[right=PRIM]{ }{\source{\Gamma}\tvdash c:\top_p,\source{\Gamma}} \\
+    \source{\top_p} \triangleq \top_p \\
+    \source{c}\triangleq c }
+    {\source{\Gamma}\tvdash\source{c}:\source{\top_p}}
+\end{mathpar}
+
+Functions type check because of the constraints on a well formed $\Psi$.
+
+\begin{mathpar}
+    \inferrule*[Right=\sub]{
+    \inferrule*[]{\Gamma\vdash f(e_1 : \tau_1, e_2 : \tau_2):\tau_3 }{\Phi(f, \tau_1, \tau_2) = \tau_3} \\
+    \source{\Gamma}\tvdash\Psi(f, e_1, e_2, \tau_1, \tau_2) = \source{\Phi(f, \tau_1, \tau_2)}}
+    {\source{\Gamma}\tvdash\source{f(e_1 : \tau_1, e_2 : \tau_2)}:\source{\tau_3}}
+\end{mathpar}
+
+
+\subsection{Commands Type Check}
+
+\subsection{Declaration}
+One case is presented here, and other follows suit along the same lines.
+\paragraph{Declaration}
+\small{
+\begin{mathpar}
+%\hspace*{-1.2cm}
+\infer[\sub]{  %leaving this as \infer to force inlining, which doesn't seem to happen with \inferrule
+    \source{\Gamma} \tvdash \source{\tau x := e}:\source{\textrm{unit}}, \source{\Gamma, x\mapsto\tau}}{
+    {\inferrule*[Right=\sub]{
+        \inferrule*[Right=\decl]{
+            \inferrule*[Right=\IH]{
+                    \inferrule*[Right=\TC]{
+                        \source{\Gamma\vdash\tau x:=e:\textrm{unit},x\mapsto\tau}
+                    }
+                    {\source{\Gamma \vdash e : \tau}}
+                }
+                {\source{\Gamma} \tvdash \source{e}:\source{\tau}}
+            } 
+            {\source{\Gamma} \tvdash \source{\tau} \source{x} := \source{e} :\textrm{unit}, \source{x}\mapsto\source{\tau}} \\
+        \source{\tau x := e} \triangleq ...
+        }
+        {\source{\Gamma} \tvdash \source{\tau x := e}:\textrm{unit}, \source{\Gamma}, \source{x}\mapsto\source{\tau}}} 
+    \source{\Gamma, x\mapsto \tau} \triangleq 
+    \source{\Gamma}, \source{x}\mapsto \source{\tau} 
+    \source{\textrm{unit}} \triangleq \textrm{unit}
+    }
+\end{mathpar}
+}
