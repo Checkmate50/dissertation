@@ -1,0 +1,23 @@
+@startuml caiman_engineering
+
+hide empty description
+skinparam linetype ortho
+
+'State Blocks
+
+state "Caiman Frontend" as CaimanFrontend
+state "Caiman IR" as CaimanIR
+
+state "Caiman Frontend AST" as FrontendAst
+state "Caiman IR AST" as IRAst
+state "Explicated Caiman AST" as ExplicatedAst
+state "Rust Code" as Rust
+
+CaimanFrontend --> FrontendAst : Parsing
+FrontendAst-->IRAst : Lowering Pass
+CaimanIR-->IRAst : Parsing
+IRAst-->ExplicatedAst : Explication
+ExplicatedAst-->ExplicatedAst : Type Checking
+ExplicatedAst-->Rust : Code Generation
+
+@enduml

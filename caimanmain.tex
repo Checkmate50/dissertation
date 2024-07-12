@@ -1,11 +1,11 @@
 \section{Introduction}
 \label{sec:caimanintro}
 
-Accelerators have become of great interest to the computing community in the last few years \xxx[dg]{TODO: do I need a citation or a few for this?}.  For specific applications or computations, specialized accelerators can provide significant performance improvements.  Using an accelerator, however, can require significant engineering effort and programmer expertise.
+Accelerators have become of great interest to the computing community in the last few years\footnote{\url{https://www.sciencedirect.com/science/article/pii/S1383762122001138}}\footnote{\url{https://ieeexplore.ieee.org/abstract/document/9043731}}.  For specific applications or computations, specialized accelerators can provide significant performance improvements.  Using an accelerator, however, can require significant engineering effort and programmer expertise.
 
-A major reason for the complexity of accelerator programming comes from the significant performance concerns that often appear when designing accelerator code.  Intuitively, when an engineer finds that an accelerator is needed for some task, performance is likely a consideration.  Since accelerators are often multithreaded, with specific requirements on data layouts or algorithm design.  These constraints and performance needs have led to years of research to optimize accelerator \emph{kernels} (accelerator--only units of computation) \xxx[dg]{References, though there are so many to pick from}.  However, there is a significant cost in the communication between devices, and specifically when this data communication occurs within the logic of the program.
+A major reason for the complexity of accelerator programming comes from the significant performance concerns that often appear when designing accelerator code.  Intuitively, when an engineer finds that an accelerator is needed for some task, performance is likely a consideration.  Since accelerators are often multithreaded, with specific requirements on data layouts or algorithm design.  These constraints and performance needs have led to years of research and industrial work to optimize accelerator \emph{kernels} (accelerator--only units of computation).  However, there is a significant cost in the communication between devices, and specifically when this data communication occurs within the logic of the program.
 
-This cost has been explored in several works in the form of automatic compiler optimizations \xxx[dg]{TODO: add references}, which rely on the compiler to generate communications or kernels based on some heuristic.  Standard GPU compilers have implemented some of these methods \xxx[dg]{TODO: I need to see if I can find a good reference to validate this particular claim}.  Despite these advances, anecdotally programmers are still optimizing performance--critical communication by hand.  This is (at least partially) due to the need for experimentation and profiling in performance--critical code, where a given solution may not perform optimally in all heterogeneous arrangements and even within a given codebase.
+This cost has been explored in several works in the form of automatic compiler optimizations\footnote{\url{https://dl.acm.org/doi/abs/10.1145/1809028.1806606}} and code generation\footnote{\url{https://ieeexplore.ieee.org/abstract/document/5585922}}, which rely on either a compiler or learning model to generate communications or kernels based on some heuristic.  Standard GPU compilers have implemented some of these methods \footnote{\url{https://link.springer.com/article/10.1007/s00607-019-00744-1}}.  Despite these advances, anecdotally programmers are still optimizing performance--critical communication by hand.  This is (at least partially) due to the need for experimentation and profiling in performance--critical code, where a given solution may not perform optimally in all heterogeneous arrangements and even within a given codebase.
 
 We argue, without any meaningful way to prove or refute this claim, that heterogeneous programming is diverse enough and performance--critical enough, that such hand--optimized solutions will continue to be important for kernel and shader engineers.  As a result, we propose a solution that raises the level of abstraction for performance engineering, but engineered so that the layer of abstraction being constructed is both transparent and decomposable.  We start by making more concrete the specific challenges we have observed while hand--optimizing kernels, specifically separating performance and correctness, and managing a combinatorial explosion of kernel interactions.
 
@@ -129,18 +129,42 @@ The philosophy of Caiman has overlap with scheduling languages such as Halide\fo
 
 Despite this core inspiration, Caiman navigates the specific challenges of heterogeneous programming differently than the scheduling languages we are aware of.   Most notably, Caiman emphasizes design for the combinatoric explosion of kernel design described in~\ref{subsec:combinatoric} and introduces type requirements for the multi--threading and condition logic present in heterogeneous decision making.
 
-\paragraph{CUDA, SYCL}
+\paragraph{Heterogeneous Languages}
 
-\xxx[dg]{TODO: make this section more detailed}.  There are a bunch of APIs for reasoning about graphics.  These provide various interfaces and mechanisms for heterogeneous implementations, though none has an approach directly comparable to Caiman.  There is an interesting note here to be made about how modern interfaces have focused more on giving control of communication characteristics rather than abstracting it.
+There have been a variety of heterogeneous programming languages in the last few years.  We highlight three well--known languages/APIs for comparison, but acknowledge there are many more projects that we will not specifically address.
+
+CUDA\footnote{\url{https://www.sciencedirect.com/science/article/pii/S1877050912003304}} is a computational language for the GPU that allows for compiling C++ code with a GPU program while providing and API ``to use C++ as a high--level--language"\footnote{\url{https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html}}.  A key feature of this approach, however, is to make the interface between CPU and GPU very thin (CUDA code strongly resembles a C++ function).  This design makes writing code fairly straightforward, but can make extracting lower--level details for performance difficult.
+
+OpenCL\footnote{\url{https://www.khronos.org/opencl/}} is a widely used heterogeneous language solution, providing a language and API for a variety of heterogeneous settings.  OpenCL provides a similar toolset to CUDA, but is designed to be more general--purpose and more controllable than GPU compute, at the expense of being somewhat difficult to program and require domain--specific expertise.  SYCL\footnote{https://www.khronos.org/sycl/} is an API built on top of (but separate to) OpenCL, and is meant to provide some of the higher--level benefits that can be seen with CUDA.
+
+Vulkan\footnote{\url{https://www.vulkan.org/}} is a graphics--specific API for the GPU that is meant to give more control over exact GPU implementation and communication details.  As with OpenCL, however, Vulkan can be difficult to use at scale due to the amount of domain--specific knowledge and optimization work needed.  Despite this, the recent interest in Vulkan gives an indication of the value that exposing detailed interfaces can have for developing performant systems.
+
+Caiman is designed as an alternative approach to these heterogeneous APIs, with an emphasis on transparency in the boundary between abstractions and performance--critical implementation details.  A Caiman implementation could be compiled to any of these targets, or used as an alternative language/API.
 
 \section{Background}
 \label{sec:background}
 
-\subsection{Submitting to the GPU}
-\label{subsec:submission}
+Before discussing the Caiman implementation, we first must examine some practical concerns when dealing with CPU--GPU communication.  While Caiman could be used for many heterogeneous systems, our particular implementation is for CPU--GPU, and so we embed some of the terminology and concepts from the GPU in our Caiman discussion to make ideas concrete.
 
-\subsection{Promises}
+Our implementation of Caiman is specifically targeting WebGPU Shading Language\footnote{\url{https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API}} (WGSL) through the Rust API WGPU.\footnote{\url{https://wgpu.rs/}}  Specific properties of our implementation are discussed in Section~\ref{sec:engineering}, but we will need to summarize WebGPU data movement to motivate details of the overall Caiman language design.
+
+Our goal in this section is to provide an overview of how data is managed in WGPU as it relates to Caiman.  We will be intentionally eliding many technical details of data movement in WGPU and more general graphics programming that exist in Caiman, but are unnecessary to understanding the Caiman typesystem and language design.
+
+\subsection{WGPU Data Submission}
 \label{subsec:promise}
+
+To move data from the CPU to the GPU, we distinguish four stages of work that need be done:
+
+\begin{enumerate}
+\item Setup: Request a memory location for writing to on the GPU, along with an \code{encoder} to manage data copying.
+\item Encoding: Using the \code{encoder}, copy data from the CPU as needed, and set the program on the GPU that will actually be run.
+\item Submission: submit that the data movement is finished and the GPU can begin processing work.
+\item Await: Once the GPU is finished processing, the output data stored in memory can be safely read.
+\end{enumerate}
+
+We name these steps as corresponding to the operations that Caiman will introduce, though similar naming schemes are used by WGPU and other GPU APIs.  Each step must be performed in sequence for a given operation, though data inputs during encoding and outputs after submission can be modified up until a signal is received for the next step.
+
+A flag specifying when the next data transfer step or operation can occur is called a \emph{fence}.  Additionally, each of these operations are asynchronous between the CPU and the GPU, as the device waiting for data may be able to continue a previously defined operation until ready to read from a piece of memory.  Such a location is called a \emph{future}, indicating that the referred data can be read at some point in the future (if the computation terminates).  It is common for futures to be implemented such that a device will \emph{await} the future (hence our use of the Await step) until the data is written to the future and a flag is set, thus synchronizing data movement.
 
 \section{Practical Caiman}
 \label{sec:practical}
@@ -398,7 +422,7 @@ separate_buffer_space(buff, n);
 buff1, buff2 :- separate_buffer_space(buff, 2);
 \end{lstlisting}
 %
-We will not being working through any examples that define a non-trivial spatial specification, but a recursive example can be found in Appendix \xxx{TODO}.
+We will not being working through any examples that define a non-trivial spatial specification.
 
 Having defined our specification functions, we can now fully state that an implementation in Caiman must be associated with exactly one of each kind of specification.  A given implementation need not implement the entire specification of each, so long as the input and output types of that implementation are correct as stated.  Note that this means that a call into a particular Caiman implementation of a function equivalence class may result in a series of calls (some of which may be also used by other Caiman implementations of that specification).
 
@@ -454,7 +478,7 @@ sptl trivial_spatial(b : BufferSpace) -> BufferSpace {
 }
 \end{lstlisting}
 %
-Now we can provide an exact implementation for this entire function.  We will write this implementation without explicit value types, though an explicitly typed version can be found in Appendix \xxx{TODO}:
+Now we can provide an exact implementation for this entire function.  We will write this implementation without explicit value types, though an explicitly typed version can be found in Appendix~\ref{subsec:typed-select-sum}:
 %
 \begin{lstlisting}
 
@@ -572,7 +596,7 @@ We will address this concern with a core piece of the Caiman design when we disc
 	x&\in \textbf{V}\\
 	f&\in \textbf{F}\\
 	c&\defas \,c_1 ; c_2 \,|\, 
-        x\leftarrow f_\psi(x_1) \,| \tau x \,|\, x\leftarrow\textrm{select}_{\psi} (x_1, x_2, x_3)\\
+        x\leftarrow f_\psi(x_1) \,| \tau\ x \,|\, x\leftarrow\textrm{select}_{\psi} (x_1, x_2, x_3)\\
     p&\defas c;\textrm{return}\, x
 \end{align*}
 \caption{Spawnling Implementation Syntax}
@@ -664,6 +688,10 @@ Finally, both Spawnling programs must specify an output type.  For the Spawnling
 	\label{fig:spectyping}
 \end{figure}
 
+We describe the type semantics for a Spawnling specification in Figure~\ref{fig:spectyping}.  The first two rules, applied to \code{.}, indicate that Spawnling specification operations are unordered; we can either apply the typing judgment to the left or the right of a \code{.} operation and use the result in the other.  Similarly, we terminate a specification program with \code{return}, and require that the expected type $\tau_\textrm{out}$.  Note also that we do not allow multiple definitions of a specification variable through requiring they are not already included in $\Psi$.
+
+The most interesting (if dense) operations in this semantics are the types to the operations $\phi(\psi_1)$ and $\textrm{if}\, \psi_1 \,\textrm{then}\, \psi_2 \,\textrm{else}\, \psi_3$.  In both of these cases, we require that types ``match up", where we use $\_$ to indicate that the remainder of our stored type is irrelevant.  The type of what is added to the context $\Psi$ is necessarily a bit messy, requiring that we retain information about the structure of the specification type for the implementation.  Specifically, for function calls, we produce the returned type, the function being called, and the input to the function being called.  Similarly, for conditions, we produce the (matching) type of each branch, no function being called, and the set of three variable used in the condition.
+
 \begin{figure}
 	\begin{mathpar}
       	\inferrule
@@ -684,7 +712,7 @@ Finally, both Spawnling programs must specify an output type.  For the Spawnling
         
         \inferrule
 		{x \notin \Gamma}
-        {\Gamma,\Gamma[x/(\tau,\top)] |- \tau x}
+        {\Gamma,\Gamma[x/(\tau,\top)] |- \tau\ x}
         
         \inferrule
         {
@@ -701,11 +729,9 @@ Finally, both Spawnling programs must specify an output type.  For the Spawnling
 	\label{fig:impltyping}
 \end{figure}
 
-\xxx[dg]{TODO: The typing semantics we use should be more--or--less self explanatory as--is, but I'll take another look when I write up the appendix proof in latex properly}
+We then describe the type semantics for the Spawnling implementation in Figure~\ref{fig:impltyping}.  The semantics for these implementations match those of an imperative language in most cases, including allowing reassignment of variables, sequential operations, and declarations of variables to fix a type.  Since a Spawnling implementation must terminate with a \code{return}, a Spawnling implementation can only typecheck if we produce a result of type $\psi_\textrm{out}$.  
 
-\subsection{Operational Semantics}
-
-\xxx[dg]{I don't think I actually need operational semantics, since they sort of ``fall out" from the simplified model I decided to go with}
+A Spawnling implementation is not explicitly tied to a particular specification outside of the definition of $\Psi$ being used.  We note that the context $\Psi$ being used is fixed throughout our typechecking of an implementation.  We use the specification typechecking results stored in $\Psi$ to validate that the argument $x_1$ to the function call $f_\psi$ matches the type of our specification requirement, namely $\psi_1$.  The rule for conditions is similar, instead requiring that each branch match with the associated branch of the specification.
 
 \section{Explication}
 \label{sec:explication}
@@ -716,7 +742,7 @@ The entire design of Caiman, however, is such that this task of writing an imple
 
 We use explication to describe the task of synthesizing a Caiman implementation from a Caiman specification in the presence of programmer--written implementation requirements.  To make this statement more concrete, we will start by working from example of how this looks in the Caiman frontend.
 
-The author notes that at the time of this writing, the programs shown in this section cannot be written as--is in the Caiman frontend, due entirely to minor missing engineering work on AST transformations.  Approximately equivalent programs can be written explicitly in the Caiman IR (described in ~\ref{subsec:ir}, and the programs are included in Appendix~\xxx{TODO}), but I believe it is important to note this limitation in our actual implementation.  Consequently, more annotations may need to be included in the finished Caiman frontend (to help guide the explicator) than are shown here.
+The author notes that at the time of this writing, the programs shown in this section cannot be written as--is in the Caiman frontend, due entirely to minor missing engineering work on AST transformations.  Approximately equivalent programs can be written explicitly in the Caiman IR (described in ~\ref{subsec:ir}, and the programs are included in Appendix~\ref{subsec:worked-explicated-example}), but I believe it is important to note this limitation in our actual implementation.  Consequently, more annotations may need to be included in the finished Caiman frontend (to help guide the explicator) than are shown here.
 
 \subsection{Using Explication}
 
@@ -761,7 +787,7 @@ Importantly, however, the explicator is somewhat possible to control outside of 
 \item Any operations provided by the programmer must be used in the order they were written.  Additionally, new operations can only be added where we have a multiline hole (\code{???})
 \end{enumerate}
 %
-The last of these rules, the ordering of operations, is the key piece of the Caiman explicator design that allows for performance manipulation without adjusting the specification (or writing many implementation functions).  We will describe precisely what this rule entails after exposing more of Caiman's implementation in Section~\ref{subsec:control}.  For now, as a concrete example, let us restrict the explicator for \code{select_sum} to ensure that the sum of \code{v2} and \code{v3} must be calculated before the condition:
+The last of these rules, the ordering of operations, is the key piece of the Caiman explicator design that allows for performance manipulation without adjusting the specification (or writing many implementation functions).  We will describe precisely what this rule entails after exposing more of Caiman's implementation in Section~\ref{subsec:ir}.  For now, as a concrete example, let us restrict the explicator for \code{select_sum} to ensure that the sum of \code{v2} and \code{v3} must be calculated before the condition:
 %
 \begin{lstlisting}
 
@@ -826,15 +852,15 @@ So far, we have focused on the human--usable Caiman frontend, used to illustrate
 Caiman IR is written to be syntactically distinct from the frontend to avoid confusion, and has the following properties meant for analysis:
 %
 \begin{itemize}
-\item A Caiman IR program consists of ``funclets" (similar to basic blocks with named inputs and outputs) to contain operations.  There is no control flow in a funclet, and calls between funclets use continuation passing style \xxx{TODO: ref CPS}.
-\item Caiman IR uses Static Single Assignment (SSA) \xxx{TODO: ref}, so each name is unique.  For ease of use, we allow \code{\%_} to be used to represent an anonymous variable (which may still be used by the Caiman explicator).
+\item A Caiman IR program consists of ``funclets" (similar to basic blocks with named inputs and outputs) to contain operations.  There is no control flow in a funclet, and calls between funclets use a style similar to CPS, or more precisely, to compiling without continuations~\footnote{\url{https://www.microsoft.com/en-us/research/publication/compiling-without-continuations/}}.
+\item Caiman IR uses Static Single Assignment, so each name is unique.  For ease of use, we allow \code{\%_} to be used to represent an anonymous variable (which may still be used by the Caiman explicator).
 \item Each operation consists of exactly instruction, and produces either nothing or exactly one result.
 \item There are minimal operations in Caiman IR (around 30 with our current implementation), with much of the work being done on external operations.
 \end{itemize}
 %
 These properties are why we need to expose Caiman IR for explication.  Specifically, we need to have a sense of Caiman's internal representation to describe explication concretely.  
 
-For the sake of examples, we will expose 7 operations in a Caiman IR implementation function.  Note that there are distinct operations used in the Caiman IR specifications; these are similar enough to the specifications we have already seen that we will not need to show them here (complete Caiman IR examples can be found in Appendix \xxx{TODO}).  For these operations we are exposing, we are ignoring some implementation cruft in the Caiman IR that is unnecessary for understanding the programs, but will appear in the examples provided.  These operations are described as follows:
+For the sake of examples, we will expose 7 operations in a Caiman IR implementation function.  Note that there are distinct operations used in the Caiman IR specifications; these are similar enough to the specifications we have already seen that we will not need to show them here (complete Caiman IR examples can be found in Appendix~\ref{subsec:caiman-ir-examples}).  For these operations we are exposing, we are ignoring some implementation cruft in the Caiman IR that is unnecessary for understanding the programs, but will appear in the examples provided.  These operations are described as follows:
 %
 \begin{itemize}
 \item \code{alloc-temporary}, which takes in a place (local, cpu, or gpu) and an exposed datatype (such as \code{i64}), and produces a memory location that can be written to.  Caiman IR does not distinguish between stack and heap allocations.  We expose \code{alloc-temporary} as the only allocation mechanism for simplicity, in cases where we need to return the reference rather than just data, we would use another operation instead.
@@ -1038,7 +1064,7 @@ In this GPU implementation, we hint at type rules to manage memory allocations w
 
 \subsection{Explication of Caiman IR}
 
-Note that, at the time of this writing our actual explicator implementation for this example at this time of writing is missing a couple of implementation details that are described here.  Specifically \code{???} is not carefully tested, and \code{begin_encoding} is not fully implemented.
+Before diving into this session, we note that, at the time of this writing, our actual explicator implementation for this example at this time of writing is missing a couple of implementation details that are described here.  Specifically \code{???} is not carefully tested, and \code{begin_encoding} is not fully implemented.
 
 With our more-exact representation of Caiman IR in hand, we can provide a precise definition of Caiman's explication syntax.  Caiman allows exactly two synctatic ``holes", defined as follows:
 %
@@ -1174,8 +1200,6 @@ To make this decision making more concrete, we will specify the exact operations
 \end{itemize}
 While we have not enumerated every implementation operation we have presented, it should be straightforward to derive the remaining operations.  One operation that bears special mention, however, is \code{begin-encoding}, which allows us to encode any number of operations as an argument.  The algorithmic solution is to consider the powerset of all allocations and iterate through this set.  In practice, we treat \code{begin-encoding} as a special case of multiline explication, where instead of allowing arbitrary operations, we can request that an allocation be included in the encoding.
 
-\xxx[dg]{Currently the multiline implementation shown here does not support conditional control flow, but neither does the current implementation in Caiman.  If I am able to get that implemented, I'll include a passage on it here}.
-
 While Caiman does currently use the algorithm we have described for explication, the critical takeaway is that there \emph{exists} an algorithm that satisfies our requirements from earlier.  Practically, we expect that pushing parts of this explication algorithm to a solver or synthesis tool may help with explicator performance and scalability.  This being said, a qualitative analysis of using Caiman's explication approach will be discussed in Section~\ref{subsec:explicationresults}
 
 \section{Caiman Engineering}
@@ -1183,45 +1207,94 @@ While Caiman does currently use the algorithm we have described for explication,
 
 We have built an implementation of the Caiman language and Caiman IR as a toolchain we will refer to as the Caiman compiler.  For our implementation\footnote{https://github.com/cucapra/caiman}, we take in Caiman or Caiman IR code, apply explication and semantic analysis, and emit Rust code to connect Rust (on the CPU) and WebGPU (on the GPU) through the WGPU\footnote{https://wgpu.rs/} interface.
 
-Our choice to emit Rust and WGPU is somewhat arbitrary -- indeed, practically we would recommend that future work on a Caiman compiler instead target an IR rather than Rust directly, and a lower--level interface like the Vulkan API\footnote{https://www.vulkan.org/}.  Nevertheless, our implementation of Caiman shows how we can construct graphics--focused and dynamic CPU/GPU code, more concretely described in Section~\ref{sec:results}.
+Our choice to emit Rust and WGPU is somewhat arbitrary -- indeed, practically we would recommend that future work on a Caiman compiler instead target an IR rather than Rust directly, and a lower--level interface like Vulkan.  Nevertheless, our implementation of Caiman shows how we can construct graphics--focused and dynamic CPU/GPU code, more concretely described in Section~\ref{sec:results}.
 
 \subsection{Compiler Infrastructure}
 \label{subsec:compilation}
 
-\xxx[dg]{TODO}
-
-The stages of work done by the Caiman compiler can be seen in Figure~\ref{fig:caiman-compiler}.  For the rest of this section, we will examine some of the technical details for each stage of compilation shown.
+The stages of work done by the Caiman compiler can be seen in Figure~\ref{fig:caiman-compiler}.  For the remainder of this section, we will examine some of the technical details for each stage of compilation, working from the top of the compiler (parsing) to the bottom (code generation).
 
 \begin{figure}
-\includegraphics[width=.7\linewidth]{fig/texture.png}
+\includegraphics[width=.7\linewidth]{fig/caimanengineering.png}
 \label{fig:caiman-compiler}
 \caption{Structure of the Caiman Compiler}
 \end{figure}
 
+\subsubsection{Caiman to Caiman IR}
 
+Caiman has two distinct representations in the frontend and the IR, resulting in two distinct Abstract Syntax Trees (ASTs).  The transformation from the Caiman frontend AST to the Caiman IR AST is straightforward (if non--trivial to build), needing to transform the specification and implementation logic to the single-operation and SSA style of the Caiman IR.  Specifications (value, timeline, and spatial) in Caiman have no control flow, so translating to the similar representation in Caiman IR requires only (simply) reducing expressions.  
+
+Translating a Caiman implementation to Caiman IR is somewhat more involved, however, as we need to account for the control flow of the function (with respect to the specification) as well as provide information about the allocation of resources in computation.  For conditions, function calls, and recursion, we translated directly for the call site based on the types of the values being used.  We do not currently attempt to implement loops in Caiman.  Allocations are calculated based on value use -- in principle, it would improve explicator flexibility to move allocation logic to the explication search, but we have not practically engineered this approach.
+
+Additionally, both specifications and implementations include standard Hindley-Milner type inference\footnote{\url{https://www.ams.org/journals/tran/1969-146-00/S0002-9947-1969-0253905-6/S0002-9947-1969-0253905-6.pdf}}.  For the implementation language, this type inference is primarily useful for control flow headers (which cannot be explicated), and values not inferred are instead pushed to the explicator for solving.
+
+\subsubsection{Caiman IR explication and typechecking}
+
+To lower the Caiman IR for typechecking, we erase variable and function names and validate program structural assumptions.  We then explicate the program as described in Section~\ref{sec:explication}.  To help make debugging explicated Caiman code manageable, the explicator maintains names throughout, requiring the explicator to retain metadata about the transformed program.  Additionally, at this stage, the explicator performs minimal typechecking to perform explication.  Importantly, however, the explicator makes no guarantee that existing code typechecks, and only intends to produce explicated code that will typecheck if existing code will typecheck.  We do not validate this claim, and instead leave formalizing this connection to future work.
+
+After explication, we guarantee that the explicator either failed to terminate (due to a type error or due to timing out), or every hole in the AST representation of the Caiman IR is filled.  Practically, we represent this state with a duplicate AST with no hole variants.  The typechecker is then able to walk through each function and validate our requirement that each implementation function does the work promised by the implemented specifications, as stated in Section~\ref{sec:formal}.  Additionally, the typechecking pass here validates properties of the allocations and data between funclets, a significant detail of Caiman engineering that is out of scope of this writing.
+
+\subsubsection{Code Generation}
+\label{subsec:generation}
+
+Finally, the resulting Caiman IR program is emitted as Rust code, which can then be linked to, compiled, and run.  This Rust code notably includes calls to externally-defined Rust functions and setting up WebGPU API allocations and function calls.  At this stage, code generation makes no attempt to optimize the resulting code (such as inlining code), leaving these additional optimizations to the underlying compiler.
+
+Caiman code generation currently does not support directly emitting WebGPU code, and as a result treats each WebGPU function as a black--box call.  It is possible to fuse these calls, or even to emit WebGPU directly in Caiman, but these additions are not yet implemented.  This detail can lead to significant performance loss, and certainly would require an implementation to use Caiman in a practical setting.
 
 \section{Results}
 \label{sec:results}
 
-This section is still somewhat of a work in progress, which I'll summarize expected results and things to be done in each sub--section.  I also still have some actual experiments to run to validate that these performance choices we've described actually show up, even if only for synthetic examples.  I'll summarize informally what the results here will look like, but without actual data yet.
+At the time of this writing, quantitative results of Caiman are minimal and not worth reporting.  We have, however, implemented around 100 synthetic examples of Caiman programs, which can give qualitative insight into the current implementation of Caiman described.  Intended future performance measurements will be summarized in Section~\ref{subsec:future}.
 
-\subsection{Timing}
+The programs implemented in Caiman are intended primarily for testing, but provide some idea of the flexibility of our produced implementation.  Notable examples of Caiman programs include the following, the full code of which is included in Appendix~\ref{subsec:caiman-frontend-examples}:
 
-The timing I intend to show is primarily based on showing that \code{select_sum} actually has differing performance (perhaps surprisingly), and then to show a bunch of examples taken from the polygence benchmark suite.  I haven't timed these out properly yet, but informally we can get visible performance variation by being ``dumb" and picking particularly bad implementations to compare against decent implementations, which is sufficient for this section.
+\begin{itemize}
+\item Nested conditional logic
+\item Recursive functions 
+\item WebGPU function calls, including conditional logic and recursive calls
+\item Fixed-sized arrays
+\item \code{select_sum}, as described in Section~\ref{sec:practical}
+\end{itemize}
 
-Depending on how productive I am, I would also like to develop and show a more interesting example from genomics (which would also change the introduction/motivation a bit if it works out).  I haven't done the work here yet though, so consider this pending.
+In developing these examples, we have found that Caiman's type system is remarkably flexible, though it takes time to become comfortable with implementing Caiman code.  Specifically, implementing a Caiman specification requires some amount of care when breaking up the specification and managing types of each operation in cases where type inference is insufficient.  
+
+This being said, the Caiman type system has caught dozens of errors we have made while implementing these functions, including mistakes in managing control flow when calling into the GPU.  We have also found that, practically, Caiman programs can be written essentially as we might expect despite the specificity of Caiman's type requirements.  
+
+The main issue we have had implementing programs is that some implementation rewrites are restricted under Caiman's type system without changing the specification, which is precisely what we would like to avoid.  A notable example of this weakness is the technical detail described in Section~\ref{subsec:generation}, where the Caiman semantics is insufficient for merging two calls that we know to be equivalent to a specific single function call.
+
+We have not yet implemented functions that significantly and scientifically test Caiman's resulting runtime performance.  Qualitatively, all Caiman programs we have written run nearly instantly, but without comparison to directly written WebGPU programs, this result is, bluntly, insufficient to draw any real conclusions.
 
 \subsection{Explication}
 \label{subsec:explicationresults}
 
-The goal of this subsection is to show that the explication used in Caiman is practical for the examples we have developed.  Informally, I have found explication to be nearly instant on most examples I've worked with, so I also intend to show how this approach scales as we just synthetically add more operations (I naturally expect exponential scaling).
+Explication is the most likely stage of Caiman compilation to produce interesting timing results, both in terms of the time of compilation and the runtime of these programs.  We have implemented synthetic examples of explication, with at most 30 lines of code for a given explication implementation.  Notably, however, at the time of this writing, we have not fully implemented the \code{???} statement described in Section~\ref{sec:explication}.
+
+At the time of this writing, qualitatively, the explication examples we have written compile and run nearly instantly.  We expect this to be similarly instant for an implementation written entirely with a \code{???} statement.  Where we expect to see the pathologically slow examples are in functions that use a mix of \code{???} statements and a small number of restricted expressions, where the greedy search done by the explicator becomes less likely to quickly find a solution.  We expect these cases to scale exponentially with the number of lines in a given funclet.
 
 \section{Conclusion}
 \label{sec:conclusion}
 
-\xxx[dg]{Something something summary of work}
+We have argued that writing performant heterogeneous operations often requires experimentation with multiple function implementations of the same underlying operation.  We have seen how this gap between intent and implementation can lead to programmer mistakes and maintaining a combinatorial explosion of function implementations.
+
+With Caiman, we have shown a mechanism by which we can separate the specification and implementation of such heterogeneous operations.  We have shown how we can represent control flow and recursive operations in a specification and how to verify that an implementation associated with a specification will calculate the data as we expect.
+
+We have also examined how we can use explication to automate generation of these implementations, and specifically in such a way that this automation can be broken down.  More concretely, we have examined how automating the generation of programs can be controlled through providing both a specification and precise line--by--line generation requirements.
+
+Finally, we have described our specific implementation for CPU/GPU code to generate Rust code to interface with WGPU.  We have also shown the structure of the Caiman compiler, and have hinted how code generation can be replaced to work in a variety of heterogeneous settings.
 
 \subsection{Future Work}
 \label{subsec:future}
 
-\xxx[dg]{TODO}
+Most immediately, timing information about explication and generated Caiman code will be gathered and reported.  Such data will allow for more concrete and narrow arguments as to the efficacy of our Caiman implementation and an examination of the potential scalability of explication.
+
+An important observation about the explication results we have observed is that the explicator does not attempt to reason about the interactions between multiple funclets.  Introducing general control flow to the explicator would \emph{likely} reduce performance (and expand engineering needs) substantially.  This being said, implementing explication in such a way as to generate functions to fill in control flow seems relatively achievable, and would help substantially in implementation details that currently need to be written by hand.
+
+The remainder of this section will discuss potential directions for Caiman that have been discussed, but not implemented.
+
+Caiman's implementation in Rust with WebGPU is fairly narrow and can be difficult to manage.  Implementing Caiman to directly generate code for an IR (such as Cranelift\footnote{\url{https://cranelift.dev/}} or LLVM\footnote{\url{https://llvm.org/}}) would improve Caiman's usability and transparency tremendously.  Additionally, targeting Vulkan would make more practical sense in exposing more details in the Caiman communication model.
+
+It would be very interesting to explore an implementation of Caiman targeting either compute (with CUDA or OpenCL), or another device entirely.  Caiman seems directly useful for multiple--device code architectures, or for using another non--CPU host (such as GPU--driven logic).  Caiman was also designed with FPGAs and network chips in mind, though without an implementation, how effective this design transfers is completely untested.
+
+Rewriting kernels entirely in Caiman seems impractical in many cases, but it also seems conceptually straightforward to write a translator from a subset of C or CUDA to a Caiman specification.  Such tooling could have clear practical advantages, allowing a user to harness the type--level power of Caiman without needing to rewrite every specification by hand.  The untested downside of this approach could be that Caiman's type system would be too rigid to allow such a straightforward translation, and this would require practical experimentation.
+
+Finally, Caiman explication code can be difficult to debug, particularly in cases where the explicator is directed incorrectly and generates a bunch of strangely--named nonsense that exposes some mistake in the specification.  The explication step we have described and implemented is transparent to the compiler, however, and there is an interesting potential HCI challenge in exploring an approach to improve Caiman error messages or provide some sort of visual or IDE tooling to examine explicated Caiman code.

@@ -1,4 +1,4 @@
-\newcount\draft\draft=1 % set to 0 for submission or publication
+\newcount\draft\draft=0 % set to 0 for submission or publication
 \documentclass[phd,tocprelim]{cornell}
 %
 % tocprelim option must be included to put the roman numeral pages in the
@@ -208,7 +208,9 @@ Your acknowledgements go here. Make sure it sits inside the brackets.
 
 \chapter{Conclusion and Future Directions}
 
-\xxx[dg]{TODO}
+We have examined how domain--specific language design for graphics programming can help programmers with managing correctness and performance considerations.  With Gator, we have shown how we can define a specialized type system for reasoning about geometric types, and how these type definitions can provide information for multi--operation transformations.  Additionally, we have shown how Gator exposed a surprising challenge in reasoning about equivalence of these transformations through the work on commutative diagrams.
+
+With the Caiman language, on the other hand, we examine how definitions of correctness and equality with respect to a specification can help explore performant solutions.  Additionally, we have shown how we can provide decomposable program implementations for heterogeneous code from these fixed specifications through explication.
 
 \appendix
 
@@ -218,11 +220,6 @@ Your acknowledgements go here. Make sure it sits inside the brackets.
 \chapter{Caiman Appendix}
 \input{caiman-appendix}
 
-% Notes to self wrt Caiman appendix:
-% 1. formal proof
-% 2. comparative examples of untyped Caiman code
-% 3. example of recursive Caiman function
-
-\bibliography{main}
+\bibliography{refs}
 
 \end{document}
