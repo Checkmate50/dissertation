@@ -1,11 +1,11 @@
 \section{Introduction}
 \label{sec:caimanintro}
 
-Accelerators have become of great interest to the computing community in the last few years\footnote{\url{https://www.sciencedirect.com/science/article/pii/S1383762122001138}}\footnote{\url{https://ieeexplore.ieee.org/abstract/document/9043731}}.  For specific applications or computations, specialized accelerators can provide significant performance improvements.  Using an accelerator, however, can require significant engineering effort and programmer expertise.
+Accelerators have become of great interest to the computing community in the last few years~\cite{acceleratorsurvey}~\cite{nnacceleration}.  For specific applications or computations, specialized accelerators can provide significant performance improvements.  Using an accelerator, however, can require significant engineering effort and programmer expertise.
 
 A major reason for the complexity of accelerator programming comes from the significant performance concerns that often appear when designing accelerator code.  Intuitively, when an engineer finds that an accelerator is needed for some task, performance is likely a consideration.  Since accelerators are often multithreaded, with specific requirements on data layouts or algorithm design.  These constraints and performance needs have led to years of research and industrial work to optimize accelerator \emph{kernels} (accelerator--only units of computation).  However, there is a significant cost in the communication between devices, and specifically when this data communication occurs within the logic of the program.
 
-This cost has been explored in several works in the form of automatic compiler optimizations\footnote{\url{https://dl.acm.org/doi/abs/10.1145/1809028.1806606}} and code generation\footnote{\url{https://ieeexplore.ieee.org/abstract/document/5585922}}, which rely on either a compiler or learning model to generate communications or kernels based on some heuristic.  Standard GPU compilers have implemented some of these methods \footnote{\url{https://link.springer.com/article/10.1007/s00607-019-00744-1}}.  Despite these advances, anecdotally programmers are still optimizing performance--critical communication by hand.  This is (at least partially) due to the need for experimentation and profiling in performance--critical code, where a given solution may not perform optimally in all heterogeneous arrangements and even within a given codebase.
+This cost has been explored in several works in the form of automatic compiler optimizations~\cite{gpgpuopti} and code generation~\cite{cudaevolve}, which rely on either a compiler or learning model to generate communications or kernels based on some heuristic.  Despite these advances, anecdotally programmers are still optimizing performance--critical communication by hand.  This is (at least partially) due to the need for experimentation and profiling in performance--critical code, where a given solution may not perform optimally in all heterogeneous arrangements and even within a given codebase.
 
 We argue, without any meaningful way to prove or refute this claim, that heterogeneous programming is diverse enough and performance--critical enough, that such hand--optimized solutions will continue to be important for kernel and shader engineers.  As a result, we propose a solution that raises the level of abstraction for performance engineering, but engineered so that the layer of abstraction being constructed is both transparent and decomposable.  We start by making more concrete the specific challenges we have observed while hand--optimizing kernels, specifically separating performance and correctness, and managing a combinatorial explosion of kernel interactions.
 
@@ -125,7 +125,7 @@ To help address these problems with performance experimentation in heterogeneous
 
 \paragraph{Scheduling Languages}
 
-The philosophy of Caiman has overlap with scheduling languages such as Halide\footnote{\url{https://people.csail.mit.edu/jrk/halide-pldi13.pdf}}, Taco\footnote{\url{https://people.csail.mit.edu/s3chou/files/senanayake-oopsla20-taco-scheduling.pdf}}, and Exo\footnote{\url{https://exo-lang.dev/}}.  The Caiman strategy of separating performance and implementation concerns is inspired by these sorts of scheduling languages, and indeed the direction for Caiman was initially written to be a scheduling language for heterogeneous interactions.  
+The philosophy of Caiman has overlap with scheduling languages such as Halide~\cite{halide}, Taco~\cite{taco}, and Exo~\cite{exo}.  The Caiman strategy of separating performance and implementation concerns is inspired by these sorts of scheduling languages, and indeed the direction for Caiman was initially written to be a scheduling language for heterogeneous interactions.  
 
 Despite this core inspiration, Caiman navigates the specific challenges of heterogeneous programming differently than the scheduling languages we are aware of.   Most notably, Caiman emphasizes design for the combinatoric explosion of kernel design described in~\ref{subsec:combinatoric} and introduces type requirements for the multi--threading and condition logic present in heterogeneous decision making.
 
@@ -133,11 +133,11 @@ Despite this core inspiration, Caiman navigates the specific challenges of heter
 
 There have been a variety of heterogeneous programming languages in the last few years.  We highlight three well--known languages/APIs for comparison, but acknowledge there are many more projects that we will not specifically address.
 
-CUDA\footnote{\url{https://www.sciencedirect.com/science/article/pii/S1877050912003304}} is a computational language for the GPU that allows for compiling C++ code with a GPU program while providing and API ``to use C++ as a high--level--language"\footnote{\url{https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html}}.  A key feature of this approach, however, is to make the interface between CPU and GPU very thin (CUDA code strongly resembles a C++ function).  This design makes writing code fairly straightforward, but can make extracting lower--level details for performance difficult.
+CUDA~\cite{cuda} is a computational language for the GPU that allows for compiling C++ code with a GPU program while providing and API ``to use C++ as a high--level--language"~\cite{cudaguide}.  A key feature of this approach, however, is to make the interface between CPU and GPU very thin (CUDA code strongly resembles a C++ function).  This design makes writing code fairly straightforward, but can make extracting lower--level details for performance difficult.
 
-OpenCL\footnote{\url{https://www.khronos.org/opencl/}} is a widely used heterogeneous language solution, providing a language and API for a variety of heterogeneous settings.  OpenCL provides a similar toolset to CUDA, but is designed to be more general--purpose and more controllable than GPU compute, at the expense of being somewhat difficult to program and require domain--specific expertise.  SYCL\footnote{https://www.khronos.org/sycl/} is an API built on top of (but separate to) OpenCL, and is meant to provide some of the higher--level benefits that can be seen with CUDA.
+OpenCL~\cite{opencl} is a widely used heterogeneous language solution, providing a language and API for a variety of heterogeneous settings.  OpenCL provides a similar toolset to CUDA, but is designed to be more general--purpose and more controllable than GPU compute, at the expense of being somewhat difficult to program and require domain--specific expertise.  SYCL~\cite{sycl} is an API built on top of (but separate to) OpenCL, and is meant to provide some of the higher--level benefits that can be seen with CUDA.
 
-Vulkan\footnote{\url{https://www.vulkan.org/}} is a graphics--specific API for the GPU that is meant to give more control over exact GPU implementation and communication details.  As with OpenCL, however, Vulkan can be difficult to use at scale due to the amount of domain--specific knowledge and optimization work needed.  Despite this, the recent interest in Vulkan gives an indication of the value that exposing detailed interfaces can have for developing performant systems.
+Vulkan~\cite{vulkan} is a graphics--specific API for the GPU that is meant to give more control over exact GPU implementation and communication details.  As with OpenCL, however, Vulkan can be difficult to use at scale due to the amount of domain--specific knowledge and optimization work needed.  Despite this, the recent interest in Vulkan gives an indication of the value that exposing detailed interfaces can have for developing performant systems.
 
 Caiman is designed as an alternative approach to these heterogeneous APIs, with an emphasis on transparency in the boundary between abstractions and performance--critical implementation details.  A Caiman implementation could be compiled to any of these targets, or used as an alternative language/API.
 
@@ -146,7 +146,7 @@ Caiman is designed as an alternative approach to these heterogeneous APIs, with 
 
 Before discussing the Caiman implementation, we first must examine some practical concerns when dealing with CPU--GPU communication.  While Caiman could be used for many heterogeneous systems, our particular implementation is for CPU--GPU, and so we embed some of the terminology and concepts from the GPU in our Caiman discussion to make ideas concrete.
 
-Our implementation of Caiman is specifically targeting WebGPU Shading Language\footnote{\url{https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API}} (WGSL) through the Rust API WGPU.\footnote{\url{https://wgpu.rs/}}  Specific properties of our implementation are discussed in Section~\ref{sec:engineering}, but we will need to summarize WebGPU data movement to motivate details of the overall Caiman language design.
+Our implementation of Caiman is specifically targeting WebGPU Shading Language~\cite{webgsl} (WGSL) through the Rust API WGPU~\cite{wgpu}.  Specific properties of our implementation are discussed in Section~\ref{sec:engineering}, but we will need to summarize WebGPU data movement to motivate details of the overall Caiman language design.
 
 Our goal in this section is to provide an overview of how data is managed in WGPU as it relates to Caiman.  We will be intentionally eliding many technical details of data movement in WGPU and more general graphics programming that exist in Caiman, but are unnecessary to understanding the Caiman typesystem and language design.
 
@@ -852,7 +852,7 @@ So far, we have focused on the human--usable Caiman frontend, used to illustrate
 Caiman IR is written to be syntactically distinct from the frontend to avoid confusion, and has the following properties meant for analysis:
 %
 \begin{itemize}
-\item A Caiman IR program consists of ``funclets" (similar to basic blocks with named inputs and outputs) to contain operations.  There is no control flow in a funclet, and calls between funclets use a style similar to CPS, or more precisely, to compiling without continuations~\footnote{\url{https://www.microsoft.com/en-us/research/publication/compiling-without-continuations/}}.
+\item A Caiman IR program consists of ``funclets" (similar to basic blocks with named inputs and outputs) to contain operations.  There is no control flow in a funclet, and calls between funclets use a style similar to CPS, or more precisely, to compiling without continuations~\cite{maurer2017compiling}.
 \item Caiman IR uses Static Single Assignment, so each name is unique.  For ease of use, we allow \code{\%_} to be used to represent an anonymous variable (which may still be used by the Caiman explicator).
 \item Each operation consists of exactly instruction, and produces either nothing or exactly one result.
 \item There are minimal operations in Caiman IR (around 30 with our current implementation), with much of the work being done on external operations.
@@ -1205,7 +1205,7 @@ While Caiman does currently use the algorithm we have described for explication,
 \section{Caiman Engineering}
 \label{sec:engineering}
 
-We have built an implementation of the Caiman language and Caiman IR as a toolchain we will refer to as the Caiman compiler.  For our implementation\footnote{https://github.com/cucapra/caiman}, we take in Caiman or Caiman IR code, apply explication and semantic analysis, and emit Rust code to connect Rust (on the CPU) and WebGPU (on the GPU) through the WGPU\footnote{https://wgpu.rs/} interface.
+We have built an implementation of the Caiman language and Caiman IR as a toolchain we will refer to as the Caiman compiler.  For our implementation\footnote{https://github.com/cucapra/caiman}, we take in Caiman or Caiman IR code, apply explication and semantic analysis, and emit Rust code to connect Rust (on the CPU) and WebGPU (on the GPU) through the WGPU interface.
 
 Our choice to emit Rust and WGPU is somewhat arbitrary -- indeed, practically we would recommend that future work on a Caiman compiler instead target an IR rather than Rust directly, and a lower--level interface like Vulkan.  Nevertheless, our implementation of Caiman shows how we can construct graphics--focused and dynamic CPU/GPU code, more concretely described in Section~\ref{sec:results}.
 
@@ -1226,7 +1226,7 @@ Caiman has two distinct representations in the frontend and the IR, resulting in
 
 Translating a Caiman implementation to Caiman IR is somewhat more involved, however, as we need to account for the control flow of the function (with respect to the specification) as well as provide information about the allocation of resources in computation.  For conditions, function calls, and recursion, we translated directly for the call site based on the types of the values being used.  We do not currently attempt to implement loops in Caiman.  Allocations are calculated based on value use -- in principle, it would improve explicator flexibility to move allocation logic to the explication search, but we have not practically engineered this approach.
 
-Additionally, both specifications and implementations include standard Hindley-Milner type inference\footnote{\url{https://www.ams.org/journals/tran/1969-146-00/S0002-9947-1969-0253905-6/S0002-9947-1969-0253905-6.pdf}}.  For the implementation language, this type inference is primarily useful for control flow headers (which cannot be explicated), and values not inferred are instead pushed to the explicator for solving.
+Additionally, both specifications and implementations include standard Hindley-Milner type inference~\cite{Hindley}.  For the implementation language, this type inference is primarily useful for control flow headers (which cannot be explicated), and values not inferred are instead pushed to the explicator for solving.
 
 \subsubsection{Caiman IR explication and typechecking}
 
@@ -1291,7 +1291,7 @@ An important observation about the explication results we have observed is that 
 
 The remainder of this section will discuss potential directions for Caiman that have been discussed, but not implemented.
 
-Caiman's implementation in Rust with WebGPU is fairly narrow and can be difficult to manage.  Implementing Caiman to directly generate code for an IR (such as Cranelift\footnote{\url{https://cranelift.dev/}} or LLVM\footnote{\url{https://llvm.org/}}) would improve Caiman's usability and transparency tremendously.  Additionally, targeting Vulkan would make more practical sense in exposing more details in the Caiman communication model.
+Caiman's implementation in Rust with WebGPU is fairly narrow and can be difficult to manage.  Implementing Caiman to directly generate code for an IR (such as Cranelift~\cite{cranelift} or LLVM~\cite{llvm}) would improve Caiman's usability and transparency tremendously.  Additionally, targeting Vulkan would make more practical sense in exposing more details in the Caiman communication model.
 
 It would be very interesting to explore an implementation of Caiman targeting either compute (with CUDA or OpenCL), or another device entirely.  Caiman seems directly useful for multiple--device code architectures, or for using another non--CPU host (such as GPU--driven logic).  Caiman was also designed with FPGAs and network chips in mind, though without an implementation, how effective this design transfers is completely untested.
 
