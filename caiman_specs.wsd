@@ -1,0 +1,30 @@
+@startuml caiman_specification
+
+hide empty description
+skinparam linetype ortho
+
+'State Blocks
+
+state "Value 2" as Value1
+state "Value 1" as Value2
+state "Timeline 1" as Timeline1
+state "Timeline 2" as Timeline2
+state "Spatial" as Spatial
+
+state "Implementation 2" as Implementation1
+state "Implementation 3" as Implementation2
+state "Implementation 1" as Implementation3
+
+Implementation1 --> Value1
+Implementation2 --> Value1
+Implementation3 --> Value2
+
+Implementation1 --> Timeline1
+Implementation2 --> Timeline2
+Implementation3 --> Timeline1
+
+Implementation1 --> Spatial
+Implementation2 --> Spatial
+Implementation3 --> Spatial
+
+@enduml

@@ -853,29 +853,31 @@ We report qualitatively on how Gator's type system influences the expression of 
 \label{sec:casestudies}
 
 \begin{figure}
-    \centering
-    \includegraphics[width=.7\linewidth]{fig/texture.png}
-    \caption{Simple texture shader implemented in Gator}
-    \label{fig:texture}
-\end{figure}
-\begin{figure}
 	\centering
-	\includegraphics[width=.7\linewidth]{fig/reflection.png}
-	\caption{Reflection  shader implemented in Gator}
-	\label{fig:reflection}
+\begin{subfigure}[A]{.45\linewidth}
+    \includegraphics[width=60mm]{fig/texture.png}
+    \caption{Texture shader}
+\end{subfigure}
+\begin{subfigure}[B]{.45\linewidth}
+	\includegraphics[width=60mm]{fig/reflection.png}
+	\caption{Reflection Shader}
+\end{subfigure}
+\caption{Example shaders implemented in Gator}
+\label{fig:shaders-1}
 \end{figure}
 	
 \begin{figure}
 	\centering
-	\includegraphics[width=.7\linewidth]{fig/shadowmap.png}
-	\caption{Shadow Map shader implemented in Gator}
-	\label{fig:shadowmap}
-\end{figure}
-\begin{figure}
-	\centering
-	\includegraphics[width=.7\linewidth]{fig/microfacet.png}
-	\caption{Microfacet shader implemented in Gator}
-	\label{fig:microfacet}
+	\begin{subfigure}[A]{.45\linewidth}
+		\includegraphics[width=60mm]{fig/shadowmap.png}
+		\caption{Shadowmap shader}
+	\end{subfigure}
+	\begin{subfigure}[B]{.45\linewidth}
+		\includegraphics[width=60mm]{fig/microfacet.png}
+		\caption{Microfacet Shader}
+	\end{subfigure}
+	\caption{Example shaders implemented in Gator}
+	\label{fig:shaders-2}
 \end{figure}
 
 % This stuff seems like a rehash of things we've already said above---no need
@@ -900,7 +902,7 @@ Instead, we assemble implementations of a range of common rendering effects:
 \end{itemize}
 %
 Each renderer consists of both CPU-side ``host'' code and several GPU-side shader programs.
-Figures~\ref{fig:texture},~\ref{fig:reflection},~\ref{fig:shadowmap}, and~\ref{fig:microfacet} depict the output of a selection of these renderers.
+Figures~\ref{fig:shaders-1} and~\ref{fig:shaders-2} depict the output of a selection of these renderers.
 % I wrote this sentence but I think it's superfluous. --A
 % We compare against baseline implementations using TypeScript and GLSL to show how Gator's type system can eliminate potential pitfalls in those standard languages.
 
