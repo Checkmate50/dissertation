@@ -61,7 +61,7 @@ var y : wugs = (wugs) x;
     \label{fig:typeExample}
 \end{figure}
 %
-This paper is about efficiently checking commutativity in diagrams that arise in real systems.
+This chapter is about efficiently checking commutativity in diagrams that arise in real systems.
 We assume a simple equivalence checker for individual transformation functions: in our type system example, for instance, it is possible to check transformation equivalence by comparing the conversion factors.
 Our aim is to analyze the graph of transformations and minimize the number of times we need to perform an equivalence check.
 Since diagrams may change over time in real systems, as new conversions are added, and verifying the entire system from scratch may be computationally expensive, we want an online method that only checks the impact of new edges.
@@ -126,7 +126,7 @@ We therefore collapse the \textsc{Online addition problem} to the \textsc{Verifi
 The latter, when given a diagram and a new edge, returns the set of parallel pairs of paths, such that if and only if the members in each pair have function equivalence, then the new graph must commute.
 The output to the \textsc{Online addition problem} can then be obtained as whether function equivalence checking for all pairs succeeds.
 
-The algorithms in this paper assume that the function equivalence oracle is reflexive, symmetric, and transitive.
+The algorithms in this chapter assume that the function equivalence oracle is reflexive, symmetric, and transitive.
 
 \section{Baseline Algorithms}
 
@@ -728,9 +728,9 @@ The same is true for F\# which has support for units of measure ~\cite{unitsOfMe
 \section{Conclusion}
 
 Being able to verify if diagrams commute allows a compiler to make
-deterministic automatic type conversions and can catch inconsistencies of definition in a program with user defined conversions.  In this paper, we have presented verification algorithms that efficiently compute the set of paths that would equal to each other if and only if the diagram would still commute after addition of a new edge.
+deterministic automatic type conversions and can catch inconsistencies of definition in a program with user defined conversions.  In this chapter, we have presented verification algorithms that efficiently compute the set of paths that would equal to each other if and only if the diagram would still commute after addition of a new edge.
 
 Integrating conversion consistency checks into widely used languages such as Scala could provide a lot of value to the program.
 Since Scala and several other languages provide automatic conversions between types, it seems important to ensure that the choice of which path to take (an apparently arbitrary choice) does not effect the behavior of the program.
 Having an algorithm to ensure the commutativity of the resulting diagrams can ensure that behavior is correct and help prevent semantic confusion or errors when using such features.
-More engineering work still remains to implement this feature in a language such as Scala, but this paper provides the algorithms necessary to explore a solution.
+More engineering work still remains to implement this feature in a language such as Scala, but this chapter provides the algorithms necessary to explore a solution.

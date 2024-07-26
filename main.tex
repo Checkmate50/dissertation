@@ -211,6 +211,12 @@ We have examined how domain--specific language design for graphics programming c
 
 With the Caiman language, on the other hand, we examine how definitions of correctness and equality with respect to a specification can help explore performant solutions.  Additionally, we have shown how we can provide decomposable program implementations for heterogeneous code from these fixed specifications through explication.
 
+Perhaps the most valuable work that should be done is validating the use of these approaches in a more practical setting.  While we have provided evidence of usability for Gator and Caiman, it can be difficult to rely on intuition for the practicalities of these designs, particularly in larger--scale industrial projects.  How do users interact with Gator types and Caiman language features?  Can beginners realistically learn and apply these systems?  How well does Caiman's approach scale once compilation speed is a realistic concern?  These are all questions that may require an academic user study or larger-scale tooling.
+
+To emphasize this second direction more, both Gator and Caiman would have significantly more impact and potential use with better tooling and integration into existing applications.  Rewriting a project with hundreds of thousands of lines of code in either of these settings is clearly unrealistic, and while Gator and Caiman both are designed to ``slot in" to an existing codebase, both type systems are much more useful when given more information about the structure of a system.
+
+Concretely, this sort of effort simply requires more engineering.  There are, however, several interesting research and design questions within this engineering.  Could we meaningfully build a (partial) C-to-Caiman compiler to help with optimizing existing programs, while preserving the Caiman semantic representation?  Could we partially annotate a large--scale graphics program with Gator--style geometry types and have inference be ``good enough" to be useful?  Caiman's transparency seems to lend itself to some interesting usability cases -- could we build a specialized extension for Caiman to ``view" the code that the explicator produces?
+
 \appendix
 
 \chapter{Gator Appendix}

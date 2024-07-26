@@ -9,10 +9,10 @@ The programming languages that express these computations, however, rarely captu
 In domains where performance is critical, most languages provide only thin abstractions over the low-level vector and matrix data types that the underlying hardware (i.e., GPU) implements.
 A typical language might have a basic \code{vec2} data type for vectors consisting of two floating-point numbers, for example, but not distinguish between 2D vectors in rectangular or polar coordinates---or between points in differently scaled rectangular coordinate systems.
 
-This paper focuses on real-time 3D rendering on GPUs, where correctness hazards in linear algebra code are particularly pervasive.
+This chapter focuses on real-time 3D rendering on GPUs, where correctness hazards in linear algebra code are particularly pervasive.
 The central problem is that graphics code frequently entangles application logic with abstract geometric reasoning. Programs must juggle vectors from a multitude of distinct coordinate systems while simultaneously optimizing for performance.
 This conflation of abstraction and implementation concerns makes it easy to confuse different coordinate system representations and to introduce subtle bugs.
-Figure~\ref{fig:bunnyimages} shows an example: a coordinate system handling bug yields incorrect visual output that would be difficult to catch with testing.
+Figures~\ref{fig:bunnygood} and~\ref{fig:bunnygood} shows an example: a coordinate system handling bug yields incorrect visual output that would be difficult to catch with testing.
 
 \subsection{The Problem}
 
@@ -24,10 +24,10 @@ Figure~\ref{fig:bunnyimages} shows an example: a coordinate system handling bug 
 \label{fig:bunnygood}
 \end{minipage}
 \begin{minipage}{.48\linewidth}
-	\centering
-	\includegraphics[scale=0.25]{fig/badbunnies.pdf}
-	\caption{Incorrect implementation.}
-	\label{fig:bunnybad}
+\centering
+\includegraphics[scale=0.25]{fig/badbunnies.pdf}
+\caption{Incorrect implementation.}
+\label{fig:bunnybad}
 \end{minipage}
 \caption{Objects rendered with an implementation of the diffuse component of Phong lighting~\cite{phong},
 % where the light source is fixed to the top right of the screen,
@@ -96,7 +96,7 @@ We found similar issues that arise when APIs fail to specify information about v
 % And in the visualization library GLVisualize.jl, users disagree about the space that the library uses for a light position.\footnote{\url{https://github.com/JuliaGL/GLVisualize.jl/pull/188}}
 The root cause in both cases is that the programming language affords no opportunity to convey vector space information.
 
-This paper advocates for making geometric spaces manifest in programs themselves via a type system.
+This chapter advocates for making geometric spaces manifest in programs themselves via a type system.
 Language support for geometric spaces can remove ambiguity and provide self-documenting interfaces between parts of a program.
 Static type checking can automatically enforce preconditions on geometric operations that would otherwise be left unchecked.
 
@@ -111,7 +111,7 @@ the \emph{geometric object}, such as a point or a direction;
 and the \emph{coordinate scheme}, such as Cartesian or spherical coordinates.
 Together, these components define which geometric operations are legal and how to implement them.
 
-The core contribution of this paper is that all three components of geometry types are necessary.  
+The core contribution of this chapter is that all three components of geometry types are necessary.  
 The three aspects interact in subtle ways, and real-world graphics rendering code varies in each component.
 Simpler systems that only use a single label~\cite{safegi} cannot express the full flexibility of realistic rendering code and cannot cleanly support automatic transformations.
 We show how encoding geometry types in a real system can help avoid and eliminate realistic geometry bugs.
@@ -124,11 +124,11 @@ The end result is a higher-level programming model that lets programmers focus o
 
 We implement Gator as an overlay on GLSL~\cite{glsl}, a popular language for implementing shaders in real-time graphics pipelines.
 Most GLSL programs are also valid in Gator, so programmers can easily port existing code and incrementally add typing annotations to improve its safety.
-We formalize a geometry type system and show that erasing these types preserves soundness.
+We formalize a geometry type system and show that erasing these types preserves a (straightforward) property of producing a well--typed term.
 In our evaluation, we port rendering programs from GLSL to qualitatively explore Gator's expressiveness and its ability to rule out geometry bugs.
 We also quantitatively compare the applications to standard GLSL implementations and find that Gator's automatic generation of transformation code does not yield meaningfully slower rendering time than hand-tuned (and unsafe) GLSL code.
 
-This paper's contributions are:
+This chapter's contributions are:
 %
 \begin{itemize}
 \item We identify a class of geometry bugs that exist in geometry-heavy, linear-algebra-centric code such as physical simulations and graphics renderers.
@@ -146,7 +146,7 @@ before describing Gator in detail.
 \label{sec:example}
 
 This section introduces the concept of geometry bugs via an example:
-we implement \emph{diffuse lighting}, a component of the classic Phong lighting model~\cite{phong}.\footnote{Appendix A gives a complete GLSL implementation of the Phong model.}
+we implement \emph{diffuse lighting}, a component of the classic Phong lighting model~\cite{phong}.\footnote{Appendix~\ref{app:llphong} gives a complete GLSL implementation of the Phong model.}
 We assume some basic linear algebra concepts but no background in graphics or rendering.
 
 \subsection{Gentle Introduction to Shader Programming}
@@ -467,27 +467,12 @@ With this notation, either the \code{scheme} or \code{frame} can be omitted with
 Gator \code{in} expressions can only be used to change the coordinate scheme or parameterizing reference frame; that is, the geometric object of the target type must be the same as the original value type.
 
 \begin{figure}
-	\begin{minipage}{.48\linewidth}
-		\includegraphics[width=3in]{fig/canonical.pdf}
-		\caption{A \emph{transformation graph} with provided transformations. The highlighted edge represents a newly added transformation function, which must be unique and agree with the existing paths on the graph.}
-		\label{fig:inpaths}
-	\end{minipage}
-	\begin{minipage}{.48\linewidth}
-		\begin{align*}
-			c &\in\text{constants}\\
-			x &\in\text{variables}\\
-			f &\in \text{function names}\\
-			p &\in\text{primitives}\\
-			t &\in\text{types} \\
-			\tau &\defas \textrm{unit} \,|\, \top_p \,|\, \bot_p \,|\, t \\
-			e &\defas v \,|\, c \,|\, f(e_1, e_2) \,|\, x\ \textrm{as!}\ \tau \,|\, x\ \textrm{in}\ \tau\\
-			C &\defas \tau \, x = e \,|\, e\\
-			P  &=  C;P \,|\, \epsilon\\
-		\end{align*}
-		\caption{Core Gator syntax.}
-		\label{fig:syntax}
-	\end{minipage}
+\centering
+\includegraphics[width=3in]{fig/canonical.pdf}
+\caption{A \emph{transformation graph} with provided transformations. The highlighted edge represents a newly added transformation function, which must be unique and agree with the existing paths on the graph.}
+\label{fig:inpaths}
 \end{figure}
+
 \paragraph{Implementation}
 The Gator compiler implements \code{in} expressions by searching for transformations to complete the chain from one type to another.
 It uses a \emph{transformation graph} where the vertices are types and the edges are transformation matrices or functions.
@@ -501,19 +486,19 @@ Gator requires these functions to be labeled with the word \code{canon}.
 Gator defines three requirements on these transformations:
 (1) there can be only one canonical function between each pair of types in a given scope, (2) all canonical functions between reference frames must map between frames of the same dimension, and (3) a canonical function can only have one non-canonical argument.
 
-To expand on condition (3); canonical functions may take in \emph{canonical arguments}, which are variables labelled with the \code{canon} keyword.  The most familiar example of this use is defining matrix---vector multiplication to be canonical; the matrix itself must be included and must be a canonical matrix:
+To expand on condition (3); canonical functions may take in \emph{canonical arguments}, which are variables labeled with the \code{canon} keyword.  The most familiar example of this use is defining matrix---vector multiplication to be canonical; the matrix itself must be included and must be a canonical matrix:
 %
-\begin{verbatim}
-	with frame(3) target:
-	canon point *(canon transformation<target> t, point x) {
-		...
-	}
+\begin{lstlisting}
+with frame(3) target:
+canon point *(canon transformation<target> t, point x) {
 	...
-	// Now declare the matrix as canonical 
-	// for use with multiplication
-	canon hom<model>.transformation<world> uModel;
-	homPos in world; // --> uModel * homPos
-\end{verbatim}
+}
+...
+// Now declare the matrix as canonical 
+// for use with multiplication
+canon hom<model>.transformation<world> uModel;
+homPos in world; // --> uModel * homPos
+\end{lstlisting}
 %
 It is legal to manually fill canonical arguments to functions with non-canonical variables; however, \code{in} expressions will never do so.
 
@@ -521,10 +506,8 @@ The intuition of canonical functions comes from affine transformations between f
 Since each frame has underlying basis vectors, transformations between frames of the same dimension which preserve these frames are necessarily unique; further, applying these bijective transformations does not cause data to ``lose information.''
 Similarly, coordinate schemes simply provide different ways to view the same information; there are often unique transformations between schemes that can be applied as needed to unify data representation.
 
-This construction of canonical functions and automatic transformations is similar to constructions provided by C\# and C++'s type coercion.
-The slightly different approach needed for \code{in} expressions will be discussed briefly in Section~\ref{sec:rw}.
-
 \subsection{Correctness of Generated Transformations}
+\label{correctness}
 
 With \code{in} expressions, Gator programmers sacrifice control for convenience:
 the compiler picks which transformation functions and matrices to use to get from one coordinate system to another.
@@ -539,7 +522,7 @@ We view heavyweight dynamic debugging aids for checking transformation correctne
 
 We can, however, state a simple consistency condition that is necessary but not sufficient for a system of canonical transformations to be correct.
 %
-The transformation system should be \emph{path independent:}
+The transformation system should be \emph{coherent} (a term borrowed from language used for type coercions~\cite{coercion}):
 for any two types $\tau_1$ and $\tau_2$, the behavior of any chain of transformations from $\tau_1$ to $\tau_2$ should be equivalent.
 %
 In other words, every edge in the transformation graph corresponds to a function---so every path corresponds to a function composition,
@@ -549,11 +532,13 @@ and every such path between the same two vertices should yield the same composed
 %
 Otherwise, the semantics of an expression \code{$e$ in $\tau$} would depend on the graph search algorithm that Gator uses to find routes in the transformation graph, which is clearly undesirable.
 
-Because it is a purely static system, Gator does not enforce path independence.
+Because it is a purely static system, Gator does not enforce coherence.
 %
-However, path independence motivates Gator's requirement that canonical transformations preserve dimensionality (see Section~\ref{sec:canon}).
+However, coherence motivates Gator's requirement that canonical transformations preserve dimensionality (see Section~\ref{sec:canon}).
 %
-Without this condition, we have found it is easy to accidentally violate path independence with non-invertible functions and result in an ambiguous transformation graph for \code{in} expressions.
+Without this condition, we have found it is easy to accidentally violate coherence with non-invertible functions and result in an ambiguous transformation graph for \code{in} expressions.
+
+Our construction of canonical functions and automatic transformations is similar to constructions provided by C\# and C++'s type coercion, which are themselves examples of general type-theoretic coercion functions.  Indeed, our intuition related to coherence can be summarized as what is (informally) needed to match the property needed for coherence given in~\cite{coercion}: "translations of any two derivations of the same typing judgement are equated in the target calculus".  The slightly different practicalities used by our \code{in} expression implementation will be discussed briefly in Section~\ref{sec:rw}.  
 \section{Formal Semantics}
 \label{sec:semantics}
 
@@ -561,18 +546,35 @@ Without this condition, we have found it is easy to accidentally violate path in
 \newcommand{\targlang}{Hatchling\xspace}
 
 Gator provides a framework for defining geometry types as an ``overlay'' on top of computation-oriented programs in a base language without geometry types.
-In this section, we formalize a core of Gator to show that its constructs are sound with respect to such an underlying language.
-The goal is a theorem stating that well-typed Gator programs, when translated, result in well-typed programs in the target language.
+In this section, we formalize a core of Gator to provide details of typechecking, without proving type soundness.
 We focus on the generic, extensible Gator language rather than formalizing the rules for any specific geometric system---affine transformations on Cartesian coordinates, for example.
-Proving soundness with respect to a linear algebra domain would be interesting future work but is out of scope for this paper.
 
-We define two languages: a high-level core semantics for Gator that includes its user-defined types, and a low-level abstract target language, \targlang.  \targlang represents a sound imperative language with some set of primitive types and operators on those types.
-For example, an instance with fixed-size vector and matrix types can reflect a simple core of GLSL.
+
+Proving soundness of the Gator type system would be interesting future work but is out of scope for this chapter.
+Concretely, to show Gator type soundness, we would need to extend our formalism with a precise definition of a geometry bug and how our type system would formally rule out such a bug.
+
+We define a high-level core semantics for Gator that includes its user-defined types.
 
 \subsection{Syntax}
 
+\begin{figure}
+	\begin{align*}
+		c &\in\text{constants}\\
+		x &\in\text{variables}\\
+		f &\in \text{function names}\\
+		p &\in\text{primitives}\\
+		t &\in\text{types} \\
+		\tau &\defas \textrm{unit} \,|\, \top_p \,|\, \bot_p \,|\, t \\
+		e &\defas x \,|\, c \,|\, f(e_1, e_2) \,|\, x\ \textrm{as!}\ \tau \,|\, x\ \textrm{in}\ \tau\\
+		C &\defas \tau \, x = e \,|\, e\\
+		P  &=  C;P \,|\, \epsilon\\
+	\end{align*}
+	\caption{Core Gator syntax.}
+	\label{fig:syntax}
+\end{figure}
+
 Figure~\ref{fig:syntax} lists the syntax of the formal core of Gator that we formalize in this section.
-The types in this core language consist of \code{unit} and a lattice over each primitive type $p$.
+The types in this core language consist of \code{unit} and a partial order with $\top_p$ and $\bot_p$ over each primitive type $p$.
 The choice of primitives is kept abstract in this formalism to highlight that the Gator extend over arbitrary underlying datatypes.
 For example, in a GLSL core language, we might have a primitive \code{float} or \code{vec3} -- something like \code{vector} would be a custom type $t$ and not a primitive.
 
@@ -580,20 +582,16 @@ A program in Gator is a series of commands; we simplify these to variable declar
 Gator expressions are constructed around function applications, with \code{as} and \code{in} expressions to help manage types..
 We assume functions always take two arguments for simplicity; extending this assumption for other argument counts is straightforward.
 
-
 \subsection{Typing Rules}
 \label{subsec:order}
 
 We define a typing judgment for Gator programs, $\Gamma |- P : \tau$, that, for any program $P$ and typing context $\Gamma$, produces a type $\tau$.  The complete semantics for this judgment can be seen in Figure~\ref{fig:typing}.  
 Note that $\Gamma$ is kept constant throughout; declaring a variable requires looking up into the constant $\Gamma$ to determine if the declared type matches the expected type.
-Keeping $\Gamma$ constant will later help with translation; the type of any expression can be determined exactly from the constant global contexts $\Gamma,\mathrm{X},\text{and }\Phi$ along with the judgment \textrm{P}.
 
-Gator requires a lattice for each primitive type; custom types on each lattice introduces new subtyping relations.
+Gator requires a partial order, along with a $\top_p$ and $\bot_p$, for each primitive type; custom types on each partial order introduce new subtyping relations.
 We define a type ordering among types $\leq$ where $t_1 \leq t_2$ means that $t_1$ is a subtype of $t_2$.
 $\leq$ is expected to be reflexive and transitive.
 In a well formed program, $\leq$ must contain a rule for every user defined type, every type (except unit) must be a subtype of a primitive top type, and every bottom type $\bot_p$ must be a subtype of each subtype of the associated $\top_p$.
-In other words, $\leq$ must conform to a lattice structure for each primitive $p$.
-The complete summary of subtyping rules can be found in the attached supplementary materials.
 
 \begin{figure}
 	\begin{mathpar}
@@ -642,71 +640,6 @@ The typing information for functions is stored in a function typing context, $\P
 Gator, as defined in these semantics, is parameterized over primitive types stored in primitive type context $X$, which maps a literal to its primitive type.
 
 The map from $\mathrm{in}$ expressions to paths is managed by the judgment $\mathrm{P}$.  More precisely, $\mathrm{P}$ maps a given start and end type $\tau_1$ and $\tau_2$ to a function name that, when applied to an expression of type $\tau_1$, produces an expression of type $\tau_2$.  We simplify the judgment of \textrm{P} here to only allow one step for notation clarity; in the real Gator implementation, the transformation may be a chain of functions.  The details of this judgment $\mathrm{P}$ are omitted for simplicity, but amount to a simple lookup through the available functions for a function of the correct type.
-
-\subsection{Translation Soundness}
-\begin{figure}
-	\begin{align*}
-		\source{c}_\Gamma &\triangleq c &
-		\source{x}_\Gamma &\triangleq x \\
-		\source{\tau\ x := e}_\Gamma &\triangleq \source{\tau}\ x := \source{e}_\Gamma &
-		\source{e\ \mathrm{as!}\ \tau}_\Gamma&\triangleq \source{e}_\Gamma \\
-		\source{e\ \mathrm{in}\ \tau_2}_\Gamma&\triangleq \source{f(e)}_\Gamma&\text{where }&\Gamma|-e:\tau_1\text{ and }f=\mathrm{P}(e,\tau_1,\tau_2)\\
-		\source{f(e_1, e_2)}_\Gamma&\triangleq f'(e_1, e_2)&\text{where }&\Gamma|-e:\tau_1,\Gamma|-e:\tau_2,\text{ and }f'=\Psi(f,e_1,e_2,\tau_1,\tau_2)\\
-		\source{\epsilon}_\Gamma&\triangleq \epsilon&
-		\source{C;P}_\Gamma&\triangleq\source{C}_\Gamma;\source{P}_\Gamma\\
-		\source{t}&\triangleq \top_p&\text{where }t&\leq\top_p\\
-		\source{\top_p}&\triangleq \top_p &
-		\source{\bot_p}&\triangleq \top_p \\
-		\source{\textrm{unit}}&\triangleq \textrm{unit}
-	\end{align*}
-	\caption{Translational semantics for expressions and types}
-	\label{fig:translation}
-\end{figure}
-
-To prove the translation soundness of Gator, we need to first define \targlang and our translation from Gator to \targlang.
-We will show that a well-typed Gator program must translate to a well-typed \targlang program. 
-
-Primitives in Gator can be translated to a type in the target language. 
-For notation convenience we name primitives such that $\top_p$ in Gator translates to $\top_p$ in \targlang.
-
-We define the syntax of \targlang to be identical to Gator syntax except for $\tau$, which is instead written as $\tau::=\mathsf{unit}\,|\,\top_p$, and without $\textrm{as!}$ or $\textrm{in}$ expressions.
-In other words, \targlang is simply Gator with custom type labels and associated operations erased.
-In the formalism of \targlang, abstraction over operation implementation is done using operation context $\Xi$ that maps an operator name to its output type.
-
-When \targlang is parameterized to be a simple core of GLSL, some top types we might see are the \code{float} and \code{vec3} types.  Translation from Gator would consist of erasing custom geometry types, such as \code{cart3<model>.point}, to their associated top type; in this case \code{vec3}.
-
-To translate Gator's externally-defined functions (which may be overloaded on types not part of \targlang), we invoke the context $\Psi$. 
-$\Psi$ maps the tuple of a function name, input expressions, and input types to an expression in the target language. 
-For example, we might map Gator's definition of subtraction between points to be a GLSL subtraction between two \code{vec3}s.
-The resulting function names must each be unique and preserve the translation of Gator's primitive types.
-A well formed function translation context $\Psi$ would necessarily map functions to expressions of the correct return type, as constrained by $\Phi$ under translation.
-
-We reuse the judgment $\mathrm{P}$ as a mechanism to resolve $\mathrm{in}$ expressions, applying the function result of evaluating the judgment to $e$.  This must produce a result of the correct translated type for a well-formed judgment \textrm{P}.
-
-The typing rule for operation expressions is:
-%
-\begin{mathpar}
-	\infer[]
-	{\Gamma\vdash o(e_1,e_2):\tau_3}
-	{\Gamma\vdash e_1:\tau_1\qquad\Gamma,\vdash e_2:\tau_2 \qquad\Xi(o)=\tau_3}
-\end{mathpar}
-%
-We emphasize this rule as being similar to Gator's rules for operations, but with a ``translated'' context using only \targlang (i.e. primitive) types.  We also note that $\Xi$ does not take in types as arguments, thus \targlang does not support overloaded functions.
-
-We define translational semantics from type-annotated Gator to \targlang in Figure~\ref{fig:translation}. 
-The typing contexts $\Gamma$ and $\Phi$ are translated by replacing every $\tau$ in their range with $\llbracket\tau\rrbracket$.
-
-Using structural induction over expressions in Gator, we are now able to show that
-\begin{theorem}[translational soundness]
-	For all $\Gamma$, $e$, and $\tau$,
-	if $\Gamma |- e : \tau$
-	then $\source{\Gamma} |- \source{e}_\Gamma : \source{\tau}$.
-\end{theorem}
-That is to say, if Gator code type checks, then \targlang code type checks.  
-Since \targlang is constrained to be sound, Gator must be sound.
-A sketch of this proof is included in the provided supplementary materials.
-% %
-% Appendix~\ref{app:formalism} gives the full translation and proves dimensional safety.
 
 \section{Implementation}
 \label{sec:practice}
@@ -911,7 +844,7 @@ For the sake of space, we highlight the most distinct cases where Gator helped c
 
 \paragraph{Reflection}
 
-Our reflection case study, shown in Figure~\ref{fig:reflection}, renders an object that reflects the dynamic scene around it, creating a ``mirrored'' appearance.
+Our reflection case study, shown in Figure~\ref{fig:shaders-1}, renders an object that reflects the dynamic scene around it, creating a ``mirrored'' appearance.
 The surrounding scene includes a static background texture, known as a \emph{skybox}, and several non-reflective floating objects to demonstrate how the reflected scene changes dynamically.
 
 Rendering a reflection effect requires several passes through the graphics pipeline.
@@ -995,7 +928,7 @@ void main() {
 The compiler uses the normal version of the transformation, correctly applying the translation component.
 
 \paragraph{Shadow Map: Light Space}
-Shadow mapping is a technique to simulate the shadows cast by 3D objects when illuminated by a point light source.  Our case study, shown in Figure~\ref{fig:shadowmap}, renders several objects that cast shadows on each other and a single ``floor'' surface.  The non-shadow coloring is simulated through Phong lighting as previously discussed.
+Shadow mapping is a technique to simulate the shadows cast by 3D objects when illuminated by a point light source.  Our case study, shown in Figure~\ref{fig:shaders-2}, renders several objects that cast shadows on each other and a single ``floor'' surface.  The non-shadow coloring is simulated through Phong lighting as previously discussed.
 
 As with the reflection renderer, to calculate shadows in a scene, we require several passes through the graphics pipeline.  The first pass renders the scene from the perspective of the \emph{light} and calculates the whether a given pixel is obscured by another.  The second pass uses this information to draw shadows; a given pixel is lit only if it is not obscured from the light.
 
@@ -1083,7 +1016,7 @@ auto result = modelDir in normalframe;
 %
 \paragraph{Textures: Parameterized Types}
 A \emph{texture} is an image that a renderer maps onto the surface of a 3D object, creating the illusion that the object has a ``textured'' surface.
-Our texture case study renders a face mesh with a single texture (shown in Figure~\ref{fig:texture}).
+Our texture case study renders a face mesh with a single texture (shown in Figure~\ref{fig:shaders-1}).
 While this example does not provide any geometry insight, we highlight the study to show the broad utility of the types introduced by Gator for a graphics context.
 GLSL represents a texture using a \code{sampler2D} value, which acts as a pointer to the requested image, which is typically an input to a shader:
 %
@@ -1217,7 +1150,7 @@ Gator's type system works as an overlay for a simpler, underlying type system th
 This pattern resembles prior work on type qualifiers~\cite{cqual}, dimension types~\cite{dimension}, and type systems for tracking physical units~\cite{unit}.
 Canonical transformations in Gator are similar in feel to Haskell's type class polymorphic functions, where Gator's \code{space} type can be defined as a type class and the \code{in} keyword behave similarly to Haskell lookup calls.
 Additionally, Gator's notion of automatic transformations is a specialized use type coercion, similar to structures introduces in the C\# and C++ languages.
-What is particular about Gator's automatic type coercion is the notion of path independence discussed in Section~\ref{sec:in}, along with a definition of uniqueness and bijectivity of canonical transformations. Together, these requirements allow automation of coordinate system transformations that would not be allowed in other, similar systems.
+What is particular about Gator's automatic type coercion comes down primarily to problem domain specifics, focusing on geometric implications related to graphics programming.  Tying Gator's type system approach to existing program implementations could provide an interesting (and useful!) direction for future work.
 
 \section{Conclusion}
 
